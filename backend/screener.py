@@ -101,11 +101,18 @@ def fetch_history(ticker, start, end):
     pct_change = round(float((df["Close"].iloc[-1] - df["Close"].iloc[-2]) / df["Close"].iloc[-2] * 100), 2) if len(df) >= 2 else 0.0
     meta = res.get("meta", {})
     market_cap = meta.get("marketCap", 0) or meta.get("totalAssets", 0) or 0
-    # Fallback: sharesOutstanding × regularMarketPrice
+    # Fallback: call /v7/finance/quote for marketCap
     if not market_cap:
-        shares = meta.get("sharesOutstanding") or 0
-        price  = meta.get("regularMarketPrice") or meta.get("chartPreviousClose") or 0
-        market_cap = int(shares * price) if (shares and price) else 0
+        try:
+            qr = _session.get(
+                _proxy_url(f"/v7/finance/quote?symbols={ticker}&fields=marketCap,totalAssets"),
+                timeout=10
+            )
+            qdata = qr.json().get("quoteResponse", {}).get("result", [])
+            if qdata:
+                market_cap = qdata[0].get("marketCap", 0) or qdata[0].get("totalAssets", 0) or 0
+        except Exception:
+            pass
     return df, pct_change, market_cap
 
 
