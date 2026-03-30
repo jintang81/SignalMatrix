@@ -198,7 +198,6 @@ export default function BottomDivergencePage() {
       {state.status === "error" && (
         <div className="panel p-6">
           <p className="text-sm text-dn/80">⚠ 无法加载数据</p>
-          <p className="text-xs text-dn/50 mt-0.5 font-trading">{state.message}</p>
           <p className="text-xs text-muted/40 mt-1">
             后端可能正在唤醒（Render 免费版冷启动约需 30 秒），请稍候重试
           </p>

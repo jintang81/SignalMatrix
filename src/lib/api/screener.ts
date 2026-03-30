@@ -28,13 +28,9 @@ export type ScanStatus = {
 
 export async function fetchDivergenceScreener(): Promise<DivergenceScreenerResult> {
   if (BACKEND_URL) {
-    try {
-      const res = await fetch(`${BACKEND_URL}/api/screener/divergence`);
-      if (!res.ok) throw new Error(`HTTP ${res.status}`);
-      return res.json();
-    } catch (e) {
-      throw new Error(`${(e as Error).message} [URL: ${BACKEND_URL}]`);
-    }
+    const res = await fetch(`${BACKEND_URL}/api/screener/divergence`);
+    if (!res.ok) throw new Error(`Screener API error: ${res.status}`);
+    return res.json();
   }
   // Mock: simulate network delay
   await new Promise((r) => setTimeout(r, 600));
