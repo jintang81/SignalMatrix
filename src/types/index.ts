@@ -272,3 +272,42 @@ export interface DivergenceScreenerResult {
   date: string;
   stocks: DivergenceStock[];
 }
+
+// ─── Volume Surge Screener Types ──────────────────────────────────
+
+export interface VolumeSurgeChartData {
+  dates: string[];
+  open: number[];
+  high: number[];
+  low: number[];
+  close: number[];
+  volume: number[];
+  ma50: (number | null)[];
+  vol_ma20: (number | null)[];
+}
+
+export interface VolumeSurgeStock {
+  ticker: string;
+  last_close: number;
+  ma50: number;
+  ytd_return: number;      // percentage, e.g. -19.1
+  last_vol: number;
+  prev_vol: number;
+  vol_ma20: number;
+  vol_ratio: number;       // today vol / vol_ma20
+  vol_ratio2: number;      // yesterday vol / vol_ma20
+  market_cap: number;
+  chart: VolumeSurgeChartData;
+}
+
+export interface VolumeSurgeScreenerResult {
+  date: string;
+  scan_time: string;
+  results: VolumeSurgeStock[];
+  params: {
+    volume_multiplier: number;
+    ma50_period: number;
+    vol_ma_period: number;
+    min_market_cap_b: number;
+  };
+}

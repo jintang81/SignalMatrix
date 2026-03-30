@@ -29,7 +29,7 @@ const BULL_SIGNAL: Screener[] = [
     desc: "价格低位出现异常放量，配合技术形态判断主力建仓信号。",
     tags: ["成交量异常", "底部建仓", "放量突破"],
     href: "/screeners/bottom-volume-surge",
-    available: false,
+    available: true,
   },
   {
     id: "duck-bill",

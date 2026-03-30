@@ -2,12 +2,16 @@
 SignalMatrix FastAPI Backend
 
 Endpoints:
-  GET  /api/screener/divergence  — return cached scan results
-  GET  /api/screener/status      — check scan status
-  POST /api/screener/run         — trigger a background scan (requires X-API-Key header)
+  GET  /api/screener/divergence       — return cached bottom-divergence scan results
+  GET  /api/screener/status           — check divergence scan status
+  POST /api/screener/run              — trigger a divergence scan (requires X-API-Key header)
+
+  GET  /api/screener/volume           — return cached bottom-volume-surge scan results
+  GET  /api/screener/volume/status    — check volume scan status
+  POST /api/screener/volume/run       — trigger a volume scan (requires X-API-Key header)
 
 Required env vars:
-  API_KEY                  — protects the /run endpoint
+  API_KEY                  — protects the /run endpoints
   UPSTASH_REDIS_REST_URL   — from Upstash console
   UPSTASH_REDIS_REST_TOKEN — from Upstash console
 """
@@ -19,8 +23,12 @@ from concurrent.futures import ThreadPoolExecutor
 from fastapi import BackgroundTasks, FastAPI, Header, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 
-from redis_client import get_result, get_status, set_result, set_status
+from redis_client import (
+    get_result, get_status, set_result, set_status,
+    get_volume_result, get_volume_status, set_volume_result, set_volume_status,
+)
 from screener import run_full_scan
+from screener_volume import run_volume_scan
 
 # ─── App ──────────────────────────────────────────────────────────
 
@@ -33,8 +41,9 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-API_KEY   = os.environ.get("API_KEY", "")
-_executor = ThreadPoolExecutor(max_workers=1)   # one scan at a time
+API_KEY          = os.environ.get("API_KEY", "")
+_executor        = ThreadPoolExecutor(max_workers=1)   # one divergence scan at a time
+_volume_executor = ThreadPoolExecutor(max_workers=1)   # one volume scan at a time
 
 
 # ─── Endpoints ────────────────────────────────────────────────────
@@ -84,7 +93,49 @@ async def trigger_scan(
     return {"message": "scan started"}
 
 
-# ─── Background task ──────────────────────────────────────────────
+# ─── Volume Surge Endpoints ───────────────────────────────────────
+
+@app.get("/api/screener/volume")
+def get_volume():
+    """Returns the most recent bottom-volume-surge scan results from Redis cache."""
+    data = get_volume_result()
+    if data is None:
+        raise HTTPException(
+            status_code=404,
+            detail="No volume scan results yet. Trigger a scan first via POST /api/screener/volume/run",
+        )
+    return data
+
+
+@app.get("/api/screener/volume/status")
+def get_volume_scan_status():
+    """Returns current volume scan status: idle | running | done | error."""
+    return get_volume_status()
+
+
+@app.post("/api/screener/volume/run", status_code=202)
+async def trigger_volume_scan(
+    background_tasks: BackgroundTasks,
+    x_api_key: str = Header(None),
+):
+    """
+    Triggers an async background volume surge scan.
+    Requires X-API-Key header matching the API_KEY env var.
+    Returns 202 immediately; poll /api/screener/volume/status for progress.
+    """
+    if not API_KEY or x_api_key != API_KEY:
+        raise HTTPException(status_code=401, detail="Invalid or missing API key")
+
+    current = get_volume_status()
+    if current.get("status") == "running":
+        return {"message": "volume scan already running", "status": current}
+
+    set_volume_status("running")
+    background_tasks.add_task(_run_volume_scan_task)
+    return {"message": "volume scan started"}
+
+
+# ─── Background tasks ─────────────────────────────────────────────
 
 async def _run_scan_task() -> None:
     loop = asyncio.get_event_loop()
@@ -94,3 +145,13 @@ async def _run_scan_task() -> None:
         set_status("done")
     except Exception as exc:
         set_status("error", error=str(exc)[:200])
+
+
+async def _run_volume_scan_task() -> None:
+    loop = asyncio.get_event_loop()
+    try:
+        result = await loop.run_in_executor(_volume_executor, run_volume_scan)
+        set_volume_result(result)
+        set_volume_status("done")
+    except Exception as exc:
+        set_volume_status("error", error=str(exc)[:200])

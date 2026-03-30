@@ -12,6 +12,10 @@ from upstash_redis import Redis
 
 KEY_RESULT = "screener:divergence:result"
 KEY_STATUS = "screener:divergence:status"
+
+VOLUME_KEY_RESULT = "screener:volume:result"
+VOLUME_KEY_STATUS = "screener:volume:status"
+
 TTL = 48 * 3600  # 48 hours
 
 _redis: Redis | None = None
@@ -50,3 +54,33 @@ def set_status(status: str, **extra) -> None:
     if status == "running":
         payload["started_at"] = now
     _get_redis().setex(KEY_STATUS, TTL, json.dumps(payload))
+
+
+# ─── Volume Surge helpers ─────────────────────────────────────────
+
+def get_volume_result() -> dict | None:
+    """Returns the last volume scan result, or None if not yet available."""
+    raw = _get_redis().get(VOLUME_KEY_RESULT)
+    if raw is None:
+        return None
+    return json.loads(raw) if isinstance(raw, str) else raw
+
+
+def set_volume_result(data: dict) -> None:
+    _get_redis().setex(VOLUME_KEY_RESULT, TTL, json.dumps(data, ensure_ascii=False))
+
+
+def get_volume_status() -> dict:
+    """Returns status dict; defaults to {"status": "idle"} if key missing."""
+    raw = _get_redis().get(VOLUME_KEY_STATUS)
+    if raw is None:
+        return {"status": "idle"}
+    return json.loads(raw) if isinstance(raw, str) else raw
+
+
+def set_volume_status(status: str, **extra) -> None:
+    now = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+    payload: dict = {"status": status, "updated_at": now, **extra}
+    if status == "running":
+        payload["started_at"] = now
+    _get_redis().setex(VOLUME_KEY_STATUS, TTL, json.dumps(payload))

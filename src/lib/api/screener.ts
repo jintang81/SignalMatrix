@@ -9,6 +9,9 @@ import type {
   DivergenceStock,
   DivergenceChartData,
   DivergenceDetail,
+  VolumeSurgeScreenerResult,
+  VolumeSurgeStock,
+  VolumeSurgeChartData,
 } from "@/types";
 
 // ─── Backend URLs ─────────────────────────────────────────────────
@@ -55,6 +58,40 @@ export async function triggerScan(): Promise<void> {
     headers: { "X-API-Key": SCAN_API_KEY },
   });
   if (!res.ok && res.status !== 202) throw new Error(`Trigger error: ${res.status}`);
+}
+
+// ─── Volume Surge Public API ──────────────────────────────────────
+
+export async function fetchVolumeSurgeScreener(): Promise<VolumeSurgeScreenerResult> {
+  if (BACKEND_URL) {
+    const res = await fetch(`${BACKEND_URL}/api/screener/volume`);
+    // 404 = no scan run yet, or endpoint not deployed — fall back to mock data
+    if (res.status === 404) return MOCK_VOLUME_SURGE_DATA;
+    if (!res.ok) throw new Error(`Volume screener API error: ${res.status}`);
+    return res.json();
+  }
+  await new Promise((r) => setTimeout(r, 600));
+  return MOCK_VOLUME_SURGE_DATA;
+}
+
+export async function fetchVolumeSurgeStatus(): Promise<ScanStatus> {
+  if (!BACKEND_URL) return { status: "idle" };
+  try {
+    const res = await fetch(`${BACKEND_URL}/api/screener/volume/status`);
+    if (!res.ok) return { status: "idle" };
+    return res.json();
+  } catch {
+    return { status: "idle" };
+  }
+}
+
+export async function triggerVolumeScan(): Promise<void> {
+  if (!BACKEND_URL) return;
+  const res = await fetch(`${BACKEND_URL}/api/screener/volume/run`, {
+    method: "POST",
+    headers: { "X-API-Key": SCAN_API_KEY },
+  });
+  if (!res.ok && res.status !== 202) throw new Error(`Volume trigger error: ${res.status}`);
 }
 
 // ─── Mock Data ────────────────────────────────────────────────────
@@ -278,4 +315,115 @@ function calcRSIArr(closes: number[], period = 14): (number | null)[] {
     result.push(avgLoss === 0 ? 100 : 100 - 100 / (1 + avgGain / avgLoss));
   }
   return result;
+}
+
+// ─── Volume Surge Mock Data ───────────────────────────────────────
+
+export const MOCK_VOLUME_SURGE_DATA: VolumeSurgeScreenerResult = {
+  date: "2026-03-29",
+  scan_time: "2026-03-29 17:35:00 PDT",
+  results: [
+    makeMockVolumeStock("META",  525.72, 643.11, -19.1, 28975085, 35780100, 12863405, 2.25, 2.78, 1329837768704),
+    makeMockVolumeStock("AMD",   104.50, 148.20, -22.4, 58432100, 62100300, 24560000, 2.38, 2.53, 168900000000),
+    makeMockVolumeStock("NVDA",  865.30, 950.40,  -8.9, 42100500, 48750200, 18340000, 2.30, 2.66, 2130000000000),
+    makeMockVolumeStock("INTC",   21.80,  28.50, -15.2, 87650400, 91230100, 36800000, 2.38, 2.48,  93500000000),
+    makeMockVolumeStock("SOXX",  178.40, 220.10, -18.9, 12340200, 14120600,  5240000, 2.36, 2.69, null),
+  ].filter(Boolean) as VolumeSurgeStock[],
+  params: {
+    volume_multiplier: 1.5,
+    ma50_period:       50,
+    vol_ma_period:     20,
+    min_market_cap_b:  5.0,
+  },
+};
+
+function makeMockVolumeStock(
+  ticker: string,
+  lastClose: number,
+  ma50: number,
+  ytdReturn: number,
+  lastVol: number,
+  prevVol: number,
+  volMa20: number,
+  volRatio: number,
+  volRatio2: number,
+  marketCap: number | null,
+): VolumeSurgeStock {
+  const N = 60;
+  // Generate a declining price series ending at lastClose, starting ~ma50 level
+  const startPrice = ma50 * (1 + Math.abs(ytdReturn) / 100 * 0.5);
+  const closes = generateVolumePriceSeries(startPrice, lastClose, N);
+
+  const open:   number[] = [];
+  const high:   number[] = [];
+  const low:    number[] = [];
+  const volume: number[] = [];
+
+  for (let i = 0; i < N; i++) {
+    const c = closes[i];
+    const range = c * (0.008 + Math.random() * 0.012);
+    const o = c + (Math.random() - 0.5) * range;
+    open.push(+o.toFixed(2));
+    high.push(+(Math.max(c, o) + Math.random() * range * 0.5).toFixed(2));
+    low.push( +(Math.min(c, o) - Math.random() * range * 0.5).toFixed(2));
+    // Surge on last 2 bars
+    if (i >= N - 2) {
+      volume.push(i === N - 1 ? lastVol : prevVol);
+    } else {
+      volume.push(Math.round(volMa20 * (0.6 + Math.random() * 0.8)));
+    }
+  }
+
+  // MA50 series (using actual full close series)
+  const ma50Series: (number | null)[] = closes.map((_, i) => {
+    if (i < 49) return null;
+    return closes.slice(i - 49, i + 1).reduce((a, b) => a + b, 0) / 50;
+  });
+
+  // Vol MA20 series
+  const volMa20Series: (number | null)[] = volume.map((_, i) => {
+    if (i < 19) return null;
+    return volume.slice(i - 19, i + 1).reduce((a, b) => a + b, 0) / 20;
+  });
+
+  const dates = generateDates(N);
+
+  const chart: VolumeSurgeChartData = {
+    dates,
+    open,
+    high,
+    low,
+    close: closes.map((v) => +v.toFixed(2)),
+    volume,
+    ma50:     ma50Series.map((v) => v === null ? null : +v.toFixed(2)),
+    vol_ma20: volMa20Series.map((v) => v === null ? null : +v.toFixed(0)),
+  };
+
+  return {
+    ticker,
+    last_close: lastClose,
+    ma50,
+    ytd_return: ytdReturn,
+    last_vol:   lastVol,
+    prev_vol:   prevVol,
+    vol_ma20:   volMa20,
+    vol_ratio:  volRatio,
+    vol_ratio2: volRatio2,
+    market_cap: marketCap ?? 0,
+    chart,
+  };
+}
+
+function generateVolumePriceSeries(startPrice: number, endPrice: number, n: number): number[] {
+  // Linear drift + noise from start to end
+  const arr: number[] = [];
+  for (let i = 0; i < n; i++) {
+    const t = i / (n - 1);
+    const base = startPrice + (endPrice - startPrice) * t;
+    const noise = base * (Math.random() - 0.5) * 0.02;
+    arr.push(Math.max(base + noise, 0.01));
+  }
+  // Normalize so last = endPrice
+  const scale = endPrice / arr[arr.length - 1];
+  return arr.map((v) => v * scale);
 }
