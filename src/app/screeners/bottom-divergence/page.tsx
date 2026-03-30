@@ -70,7 +70,11 @@ export default function BottomDivergencePage() {
       .catch(() => { /* backend not connected, ignore */ });
 
     fetchDivergenceScreener()
-      .then((data) => setState({ status: "ready", data }))
+      .then((data) => {
+        setState({ status: "ready", data });
+        // Clear any stale scan error once data loads successfully
+        setScanStatus((prev) => (prev.status === "error" ? { status: "idle" } : prev));
+      })
       .catch((e: Error) => setState({ status: "error", message: e.message }));
 
     return stopPolling;
@@ -79,13 +83,13 @@ export default function BottomDivergencePage() {
   // ── Refresh handler ────────────────────────────────────────────
 
   const handleRefresh = useCallback(async () => {
+    setScanStatus({ status: "running" });
     try {
-      setScanStatus({ status: "running" });
       await triggerScan();
-      startPolling();
-    } catch (e: unknown) {
-      setScanStatus({ status: "error", error: (e as Error).message });
+    } catch {
+      // Render free tier may be cold-starting; poll status anyway
     }
+    startPolling();
   }, [startPolling]);
 
   // ── Derived data ───────────────────────────────────────────────
