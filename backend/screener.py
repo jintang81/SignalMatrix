@@ -573,6 +573,6 @@ def run_full_scan() -> dict:
 
     results.sort(key=lambda s: (-(s.get("mktcap_b") or 0), -len(s["triggered"])))
     return {
-        "date": str(datetime.today().date()),
+        "date": str(datetime.now(__import__("zoneinfo").ZoneInfo("America/Los_Angeles")).date()),
         "stocks": results,
     }
