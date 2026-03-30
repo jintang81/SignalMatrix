@@ -362,8 +362,8 @@ function draw(
 
   const onLeave = () => { if (tooltipEl) tooltipEl.style.display = "none"; };
 
-  canvas.removeEventListener("mousemove", canvas._stMove as EventListener);
-  canvas.removeEventListener("mouseleave", canvas._stLeave as EventListener);
+  canvas.removeEventListener("mousemove", (canvas as unknown as Record<string, unknown>)._stMove as EventListener);
+  canvas.removeEventListener("mouseleave", (canvas as unknown as Record<string, unknown>)._stLeave as EventListener);
   (canvas as unknown as Record<string, unknown>)._stMove = onMove;
   (canvas as unknown as Record<string, unknown>)._stLeave = onLeave;
   canvas.addEventListener("mousemove", onMove);
