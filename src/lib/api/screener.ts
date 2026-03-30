@@ -12,7 +12,11 @@ import type {
 } from "@/types";
 
 // ─── Backend URLs ─────────────────────────────────────────────────
-const BACKEND_URL  = process.env.NEXT_PUBLIC_BACKEND_URL  ?? "";
+const _envUrl = process.env.NEXT_PUBLIC_BACKEND_URL ?? "";
+// If env var is missing or points to localhost, use the production Render URL
+const BACKEND_URL = (_envUrl && !_envUrl.startsWith("http://localhost"))
+  ? _envUrl
+  : "https://signalmatrix-api.onrender.com";
 const SCAN_API_KEY = process.env.NEXT_PUBLIC_SCAN_API_KEY ?? "";
 
 // ─── Types ────────────────────────────────────────────────────────
