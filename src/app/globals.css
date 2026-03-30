@@ -1,0 +1,138 @@
+@import "tailwindcss";
+
+/* ─────────────────────────────────────────────
+   Design Tokens — SignalMatrix Blue-Navy Fintech
+   ───────────────────────────────────────────── */
+@theme {
+  /* Background layers */
+  --color-bg:   #0c0f18;
+  --color-bg-2: #111827;
+  --color-bg-3: #1c2535;
+
+  /* Border */
+  --color-border: #2e3a50;
+
+  /* Gold accent */
+  --color-gold:   #c9a84c;
+  --color-gold-2: #f0cc6e;
+
+  /* Market directional */
+  --color-up:   #26a69a;
+  --color-dn:   #ef5350;
+  --color-bull: #00e676;
+  --color-bear: #ff1744;
+
+  /* Typography */
+  --color-muted: #94a3b8;
+  --color-txt:   #e2e8f0;
+
+  /* Font families (next/font overrides --font-stm / --font-nsc at runtime) */
+  --font-trading: 'Share Tech Mono', monospace;
+  --font-chinese: 'Noto Serif SC', serif;
+
+  /* Easing */
+  --ease-expo: cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+/* ─── Base ─────────────────────────────────── */
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+html {
+  color-scheme: dark;
+}
+
+body {
+  background-color: #0c0f18;
+  color: #e2e8f0;
+  font-family: var(--font-stm, 'Share Tech Mono', monospace);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+/* ─── Component Classes ─────────────────────── */
+@layer utilities {
+  /* Panel — elevated surface card */
+  .panel {
+    background-color: #131c2e;
+    border: 1px solid #3a4f6a;
+    border-radius: 0.5rem;
+  }
+
+  /* Button */
+  .btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.375rem;
+    padding: 0.375rem 0.875rem;
+    font-size: 0.75rem;
+    letter-spacing: 0.08em;
+    border-radius: 0.25rem;
+    transition: all 180ms var(--ease-expo);
+    cursor: pointer;
+    border: 1px solid #2e3a50;
+    background-color: #1c2535;
+    color: #e2e8f0;
+    font-family: inherit;
+  }
+  .btn:hover {
+    border-color: #3a4f6a;
+    background-color: #253247;
+    color: #f0cc6e;
+  }
+  .btn:active {
+    transform: scale(0.97);
+  }
+  .btn-active,
+  .btn-active:hover {
+    border-color: rgba(201, 168, 76, 0.65);
+    color: #c9a84c;
+    background-color: rgba(201, 168, 76, 0.12);
+  }
+
+  /* Tag badges */
+  .tag {
+    display: inline-flex;
+    align-items: center;
+    padding: 0.125rem 0.5rem;
+    font-size: 0.75rem;
+    letter-spacing: 0.12em;
+    border-radius: 0.25rem;
+    border: 1px solid;
+    font-family: inherit;
+  }
+  .tag-up {
+    border-color: #26a69a;
+    color: #26a69a;
+    background-color: rgb(38 166 154 / 0.08);
+  }
+  .tag-dn {
+    border-color: #ef5350;
+    color: #ef5350;
+    background-color: rgb(239 83 80 / 0.08);
+  }
+  .tag-gold {
+    border-color: #c9a84c;
+    color: #c9a84c;
+    background-color: rgb(201 168 76 / 0.08);
+  }
+  .tag-muted {
+    border-color: #2e3a50;
+    color: #94a3b8;
+    background-color: rgb(46 58 80 / 0.4);
+  }
+}
+
+/* ─── Animations ────────────────────────────── */
+@keyframes pulse-dot {
+  0%, 100% { opacity: 1; }
+  50%       { opacity: 0.35; }
+}
+
+@keyframes fade-in {
+  from { opacity: 0; transform: translateY(4px); }
+  to   { opacity: 1; transform: translateY(0); }
+}

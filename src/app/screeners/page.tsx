@@ -1,0 +1,210 @@
+import Link from "next/link";
+
+// ─── Data ─────────────────────────────────────────────────────────
+
+type Screener = {
+  id: string;
+  name: string;
+  nameZh: string;
+  desc: string;
+  tags: string[];
+  href: string;
+  available: boolean;
+};
+
+const BULL_SIGNAL: Screener[] = [
+  {
+    id: "bottom-divergence",
+    name: "BOTTOM DIVERGENCE",
+    nameZh: "底背离",
+    desc: "价格创新低而 MACD DIFF 或 RSI 不创新低，捕捉潜在底部反转信号。",
+    tags: ["MACD 背离", "RSI 背离", "底部反转"],
+    href: "/screeners/bottom-divergence",
+    available: true,
+  },
+  {
+    id: "bottom-volume-surge",
+    name: "BOTTOM VOLUME SURGE",
+    nameZh: "底部放量",
+    desc: "价格低位出现异常放量，配合技术形态判断主力建仓信号。",
+    tags: ["成交量异常", "底部建仓", "放量突破"],
+    href: "/screeners/bottom-volume-surge",
+    available: false,
+  },
+  {
+    id: "duck-bill",
+    name: "DUCK BILL",
+    nameZh: "正鸭嘴形态",
+    desc: "短期均线加速上穿长期均线，均线呈鸭嘴张开，趋势加速做多信号。",
+    tags: ["均线形态", "趋势加速", "多头排列"],
+    href: "/screeners/duck-bill",
+    available: false,
+  },
+  {
+    id: "unusual-options",
+    name: "UNUSUAL OPTIONS",
+    nameZh: "异常期权信号",
+    desc: "扫描异常大单期权成交，捕捉机构/主力的方向性押注与隐含信息。",
+    tags: ["期权异常", "大单扫描", "机构动向", "隐含波动率"],
+    href: "/screeners/unusual-options",
+    available: false,
+  },
+];
+
+const BEAR_SIGNAL: Screener[] = [
+  {
+    id: "top-divergence",
+    name: "TOP DIVERGENCE",
+    nameZh: "顶背离",
+    desc: "价格创新高而 MACD 或 RSI 不创新高，识别潜在顶部做空/止盈信号。",
+    tags: ["MACD 顶背离", "RSI 顶背离", "顶部反转"],
+    href: "/screeners/top-divergence",
+    available: false,
+  },
+  {
+    id: "top-volume-surge",
+    name: "TOP VOLUME SURGE",
+    nameZh: "顶部放量",
+    desc: "价格高位异常放量，判断主力出货与顶部信号。",
+    tags: ["顶部放量", "主力出货", "成交量异常"],
+    href: "/screeners/top-volume-surge",
+    available: false,
+  },
+  {
+    id: "inverted-duck-bill",
+    name: "INVERTED DUCK BILL",
+    nameZh: "倒鸭嘴形态",
+    desc: "短期均线加速下穿长期均线，均线倒置张开，趋势加速做空信号。",
+    tags: ["均线形态", "趋势加速", "空头排列"],
+    href: "/screeners/inverted-duck-bill",
+    available: false,
+  },
+];
+
+const AI_STRATEGY: Screener[] = [
+  {
+    id: "ai-strategy",
+    name: "AI STRATEGY",
+    nameZh: "AI 综合策略",
+    desc: "结合市场环境、技术信号与 AI 分析生成每日综合操作策略，持续开发中。",
+    tags: ["Claude AI", "综合策略", "市场环境", "每日更新"],
+    href: "/screeners/ai-strategy",
+    available: false,
+  },
+];
+
+// ─── Sub-components ───────────────────────────────────────────────
+
+function ScreenerCard({ s }: { s: Screener }) {
+  if (s.available) {
+    return (
+      <Link
+        href={s.href}
+        className="panel p-4 flex flex-col gap-2.5 cursor-pointer transition-all duration-200 hover:border-bull/40 hover:bg-bull/[0.02] hover:-translate-y-0.5"
+      >
+        <div className="flex items-start justify-between gap-2">
+          <div>
+            <div className="flex items-center gap-2 mb-0.5">
+              <p className="text-[11px] tracking-[0.12em] text-bull">{s.name}</p>
+              <span className="tag tag-up text-[9px]">已上线</span>
+            </div>
+            <p className="text-[10px] text-muted/50 font-chinese">{s.nameZh}</p>
+          </div>
+          <span className="text-muted/30 mt-0.5">→</span>
+        </div>
+        <p className="text-[11px] text-muted/60 leading-relaxed flex-1">{s.desc}</p>
+        <div className="flex flex-wrap gap-1">
+          {s.tags.map((t) => (
+            <span key={t} className="tag tag-muted text-[9px]">{t}</span>
+          ))}
+        </div>
+      </Link>
+    );
+  }
+  return (
+    <div className="panel p-4 flex flex-col gap-2.5 opacity-35 cursor-default">
+      <div>
+        <div className="flex items-center gap-2 mb-0.5">
+          <p className="text-[11px] tracking-[0.12em] text-muted">{s.name}</p>
+          <span className="tag tag-muted text-[9px]">即将上线</span>
+        </div>
+        <p className="text-[10px] text-muted/50 font-chinese">{s.nameZh}</p>
+      </div>
+      <p className="text-[11px] text-muted/60 leading-relaxed flex-1">{s.desc}</p>
+      <div className="flex flex-wrap gap-1">
+        {s.tags.map((t) => (
+          <span key={t} className="tag tag-muted text-[9px]">{t}</span>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function Section({
+  title,
+  titleZh,
+  accent,
+  screeners,
+}: {
+  title: string;
+  titleZh: string;
+  accent: string;
+  screeners: Screener[];
+}) {
+  return (
+    <div className="space-y-3">
+      {/* Section header */}
+      <div className="flex items-center gap-3">
+        <div className="w-1 h-5 rounded-full" style={{ background: accent }} />
+        <div>
+          <span className="text-[11px] tracking-[0.18em] font-trading" style={{ color: accent }}>
+            {title}
+          </span>
+          <span className="text-[10px] text-muted/40 font-chinese ml-2">{titleZh}</span>
+        </div>
+        <div className="flex-1 h-px bg-border/40" />
+      </div>
+      {/* Cards grid */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+        {screeners.map((s) => (
+          <ScreenerCard key={s.id} s={s} />
+        ))}
+      </div>
+    </div>
+  );
+}
+
+// ─── Page ─────────────────────────────────────────────────────────
+
+export default function ScreeerPage() {
+  return (
+    <div className="py-6 space-y-6 min-h-[calc(100dvh-3.5rem)]">
+      {/* Header */}
+      <div className="panel p-5">
+        <p className="text-sm tracking-[0.18em] text-muted mb-1">SCREENERS</p>
+        <p className="text-xs text-muted/60">
+          基于预定义信号逻辑的美股筛选器，每日定时扫描 · 支持盘中按需触发
+        </p>
+      </div>
+
+      <Section
+        title="BULL SIGNAL"
+        titleZh="多头信号"
+        accent="#00e676"
+        screeners={BULL_SIGNAL}
+      />
+      <Section
+        title="BEAR SIGNAL"
+        titleZh="空头信号"
+        accent="#ff1744"
+        screeners={BEAR_SIGNAL}
+      />
+      <Section
+        title="AI STRATEGY"
+        titleZh="AI 综合策略"
+        accent="#c9a84c"
+        screeners={AI_STRATEGY}
+      />
+    </div>
+  );
+}

@@ -1,0 +1,38 @@
+services:
+  # ── Web Service (FastAPI) ──────────────────────────────────────
+  - type: web
+    name: signalmatrix-api
+    runtime: python
+    rootDir: backend
+    buildCommand: pip install -r requirements.txt
+    startCommand: uvicorn main:app --host 0.0.0.0 --port $PORT
+    envVars:
+      - key: UPSTASH_REDIS_REST_URL
+        sync: false          # set manually in Render dashboard
+      - key: UPSTASH_REDIS_REST_TOKEN
+        sync: false
+      - key: API_KEY
+        sync: false
+
+  # ── Cron Job (daily scan trigger) ─────────────────────────────
+  # Calls POST /api/screener/run every weekday at 5:30 PM ET (21:30 UTC)
+  - type: cron
+    name: signalmatrix-daily-scan
+    runtime: python
+    rootDir: backend
+    schedule: "30 21 * * 1-5"
+    buildCommand: pip install requests
+    startCommand: >-
+      python -c "
+      import requests, os, sys;
+      url = os.environ['BACKEND_URL'] + '/api/screener/run';
+      key = os.environ['API_KEY'];
+      r = requests.post(url, headers={'X-API-Key': key}, timeout=30);
+      print(r.status_code, r.text);
+      sys.exit(0 if r.status_code in (200, 202) else 1)
+      "
+    envVars:
+      - key: BACKEND_URL
+        sync: false          # e.g. https://signalmatrix-api.onrender.com
+      - key: API_KEY
+        sync: false

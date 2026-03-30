@@ -1,0 +1,10 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(python:*)",
+      "Bash(npx create-next-app:*)",
+      "Bash(npm show:*)",
+      "Bash(npx tsc:*)"
+    ]
+  }
+}
