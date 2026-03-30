@@ -17,13 +17,15 @@ type PageState =
   | { status: "error"; message: string }
   | { status: "ready"; data: DivergenceScreenerResult };
 
-const POLL_INTERVAL = 5000; // ms
+const POLL_INTERVAL = 5000;
+const MAX_POLL_COUNT = 72; // 72 × 5s = 6 min timeout
 
 export default function BottomDivergencePage() {
   const [state, setState] = useState<PageState>({ status: "loading" });
   const [filter, setFilter] = useState<FilterMode>("all");
   const [scanStatus, setScanStatus] = useState<ScanStatus>({ status: "idle" });
   const pollingRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const pollCountRef = useRef(0);
 
   // ── Polling helpers ────────────────────────────────────────────
 
@@ -36,13 +38,20 @@ export default function BottomDivergencePage() {
 
   const startPolling = useCallback(() => {
     stopPolling();
+    pollCountRef.current = 0;
     pollingRef.current = setInterval(async () => {
+      pollCountRef.current += 1;
+      // Timeout after 6 minutes
+      if (pollCountRef.current > MAX_POLL_COUNT) {
+        stopPolling();
+        setScanStatus({ status: "error", error: "扫描超时，请稍候再试" });
+        return;
+      }
       try {
         const s = await fetchScanStatus();
         setScanStatus(s);
         if (s.status === "done") {
           stopPolling();
-          // Reload results after scan completes
           try {
             const data = await fetchDivergenceScreener();
             setState({ status: "ready", data });
@@ -53,7 +62,7 @@ export default function BottomDivergencePage() {
           stopPolling();
         }
       } catch {
-        // network hiccup — keep polling
+        // network hiccup — keep polling (Render may still be waking up)
       }
     }, POLL_INTERVAL);
   }, [stopPolling]);
@@ -61,7 +70,6 @@ export default function BottomDivergencePage() {
   // ── Initial load ───────────────────────────────────────────────
 
   useEffect(() => {
-    // Restore any in-progress scan state
     fetchScanStatus()
       .then((s) => {
         setScanStatus(s);
@@ -72,7 +80,6 @@ export default function BottomDivergencePage() {
     fetchDivergenceScreener()
       .then((data) => {
         setState({ status: "ready", data });
-        // Clear any stale scan error once data loads successfully
         setScanStatus((prev) => (prev.status === "error" ? { status: "idle" } : prev));
       })
       .catch((e: Error) => setState({ status: "error", message: e.message }));
@@ -86,11 +93,24 @@ export default function BottomDivergencePage() {
     setScanStatus({ status: "running" });
     try {
       await triggerScan();
+      startPolling();
     } catch {
-      // Render free tier may be cold-starting; poll status anyway
+      // Render free tier cold start — backend is waking up, don't poll
+      setScanStatus({ status: "error", error: "后端正在唤醒，请 30 秒后再试" });
     }
-    startPolling();
   }, [startPolling]);
+
+  // ── Retry data load (for cold-start failures) ──────────────────
+
+  const handleRetry = useCallback(() => {
+    setState({ status: "loading" });
+    fetchDivergenceScreener()
+      .then((data) => {
+        setState({ status: "ready", data });
+        setScanStatus({ status: "idle" });
+      })
+      .catch((e: Error) => setState({ status: "error", message: e.message }));
+  }, []);
 
   // ── Derived data ───────────────────────────────────────────────
 
@@ -161,7 +181,7 @@ export default function BottomDivergencePage() {
         )}
         {scanStatus.status === "error" && (
           <p className="text-[10px] text-dn/60 mt-1.5 font-trading">
-            扫描出错：{scanStatus.error ?? "未知错误"}
+            {scanStatus.error ?? "未知错误"}
           </p>
         )}
       </div>
@@ -174,11 +194,19 @@ export default function BottomDivergencePage() {
         </div>
       )}
 
-      {/* Error */}
+      {/* Error — with retry button */}
       {state.status === "error" && (
         <div className="panel p-6">
-          <p className="text-sm text-dn/80">⚠ {state.message}</p>
-          <p className="text-xs text-muted/40 mt-1">请稍后重试或检查后端连接</p>
+          <p className="text-sm text-dn/80">⚠ 无法加载数据</p>
+          <p className="text-xs text-muted/40 mt-1">
+            后端可能正在唤醒（Render 免费版冷启动约需 30 秒），请稍候重试
+          </p>
+          <button
+            onClick={handleRetry}
+            className="btn text-[11px] font-trading mt-3 text-muted/70 border-border/60 hover:border-gold/50 hover:text-gold"
+          >
+            ↺ 重试
+          </button>
         </div>
       )}
 
