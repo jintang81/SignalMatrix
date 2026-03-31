@@ -136,6 +136,7 @@ export async function triggerDuckScan(): Promise<void> {
 
 export const MOCK_DIVERGENCE_DATA: DivergenceScreenerResult = {
   date: "2026-03-29",
+  scan_time: "2026-03-29 17:30:00 PDT",
   stocks: [
     makeMockStock("NVDA",  "MACD+RSI", 875.40, +2.31, 2150.0, 1.8, 31.2, false),
     makeMockStock("AAPL",  "MACD",     172.50, -0.45, 2680.0, 1.2, 38.5, false),

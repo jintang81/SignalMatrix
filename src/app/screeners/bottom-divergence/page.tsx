@@ -213,7 +213,7 @@ export default function BottomDivergencePage() {
       {/* Ready */}
       {state.status === "ready" && (
         <>
-          <SummaryStats stocks={state.data.stocks} scanDate={state.data.date} />
+          <SummaryStats stocks={state.data.stocks} scanDate={state.data.date} scanTime={state.data.scan_time} />
           <FilterBar active={filter} counts={counts} onChange={setFilter} />
 
           {filtered.length === 0 ? (

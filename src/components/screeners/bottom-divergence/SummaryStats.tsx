@@ -3,9 +3,10 @@ import type { DivergenceStock } from "@/types";
 interface Props {
   stocks: DivergenceStock[];
   scanDate: string;
+  scanTime?: string;
 }
 
-export default function SummaryStats({ stocks, scanDate }: Props) {
+export default function SummaryStats({ stocks, scanDate, scanTime }: Props) {
   const both = stocks.filter((s) => s.triggered.length === 2).length;
   const macdOnly = stocks.filter(
     (s) => s.triggered.length === 1 && s.triggered[0] === "MACD"
@@ -15,7 +16,7 @@ export default function SummaryStats({ stocks, scanDate }: Props) {
   ).length;
 
   const items = [
-    { label: "筛选结果", value: stocks.length, sub: `扫描日期 ${scanDate}`, accent: "var(--color-gold)" },
+    { label: "筛选结果", value: stocks.length, sub: `扫描日期 ${scanDate}`, time: scanTime, accent: "var(--color-gold)" },
     { label: "MACD + RSI 双重背离", value: both,     sub: "信号最强",   accent: "var(--color-bull)" },
     { label: "仅 MACD 背离",        value: macdOnly, sub: "单一指标",   accent: "#a78bfa" },
     { label: "仅 RSI 背离",         value: rsiOnly,  sub: "单一指标",   accent: "var(--color-up)" },
@@ -37,6 +38,9 @@ export default function SummaryStats({ stocks, scanDate }: Props) {
             {item.value}
           </p>
           <p className="text-[10px] text-muted/50 font-trading">{item.sub}</p>
+          {"time" in item && item.time && (
+            <p className="text-[10px] text-muted/40 font-trading">{item.time}</p>
+          )}
         </div>
       ))}
     </div>

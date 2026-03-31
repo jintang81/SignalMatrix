@@ -3,9 +3,10 @@ import type { VolumeSurgeStock } from "@/types";
 interface Props {
   stocks: VolumeSurgeStock[];
   scanDate: string;
+  scanTime?: string;
 }
 
-export default function SummaryStats({ stocks, scanDate }: Props) {
+export default function SummaryStats({ stocks, scanDate, scanTime }: Props) {
   const total   = stocks.length;
   const avgVol  = total > 0
     ? (stocks.reduce((s, r) => s + r.vol_ratio, 0) / total)
@@ -22,6 +23,7 @@ export default function SummaryStats({ stocks, scanDate }: Props) {
       label:  "符合股票",
       value:  total,
       sub:    `扫描日期 ${scanDate}`,
+      time:   scanTime,
       accent: "var(--color-gold)",
       fmt:    (v: number) => String(v),
     },
@@ -63,6 +65,9 @@ export default function SummaryStats({ stocks, scanDate }: Props) {
             {item.fmt(item.value)}
           </p>
           <p className="text-[10px] text-muted/50 font-trading">{item.sub}</p>
+          {"time" in item && item.time && (
+            <p className="text-[10px] text-muted/40 font-trading">{item.time}</p>
+          )}
         </div>
       ))}
     </div>

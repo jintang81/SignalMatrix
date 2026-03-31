@@ -3,9 +3,10 @@ import type { DuckStock } from "@/types";
 interface Props {
   stocks: DuckStock[];
   scanDate: string;
+  scanTime?: string;
 }
 
-export default function SummaryStats({ stocks, scanDate }: Props) {
+export default function SummaryStats({ stocks, scanDate, scanTime }: Props) {
   const count = stocks.length;
 
   const avgAngle = count > 0
@@ -21,7 +22,7 @@ export default function SummaryStats({ stocks, scanDate }: Props) {
     : "—";
 
   const cards = [
-    { label: "符合条件股票",  value: count,              sub: `扫描日期 ${scanDate}` },
+    { label: "符合条件股票",  value: count,              sub: `扫描日期 ${scanDate}`, time: scanTime },
     { label: "平均开口角度",  value: avgAngle + (count > 0 ? "°" : ""), sub: "≥25° 为基准" },
     { label: "最大开口角度",  value: maxAngle + (count > 0 ? "°" : ""), sub: "形态最强" },
     { label: "平均成交量比",  value: avgVol + (count > 0 ? "x" : ""),   sub: "近3日 vs 20日均量" },
@@ -40,6 +41,9 @@ export default function SummaryStats({ stocks, scanDate }: Props) {
           </p>
           <p className="text-2xl font-bold text-txt leading-none">{c.value}</p>
           <p className="text-[10px] text-muted/40 mt-1 font-trading">{c.sub}</p>
+          {"time" in c && c.time && (
+            <p className="text-[10px] text-muted/40 font-trading">{c.time}</p>
+          )}
         </div>
       ))}
     </div>

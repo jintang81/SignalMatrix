@@ -270,6 +270,7 @@ export interface DivergenceStock {
 
 export interface DivergenceScreenerResult {
   date: string;
+  scan_time?: string;
   stocks: DivergenceStock[];
 }
 

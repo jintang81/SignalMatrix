@@ -572,7 +572,12 @@ def run_full_scan() -> dict:
             pass
 
     results.sort(key=lambda s: (-(s.get("mktcap_b") or 0), -len(s["triggered"])))
+    from zoneinfo import ZoneInfo
+    la_tz = ZoneInfo("America/Los_Angeles")
+    now_la = datetime.now(la_tz)
+    tz_abbr = "PDT" if now_la.dst() and now_la.dst().total_seconds() > 0 else "PST"
     return {
-        "date": str(datetime.now(__import__("zoneinfo").ZoneInfo("America/Los_Angeles")).date()),
-        "stocks": results,
+        "date":      str(now_la.date()),
+        "scan_time": now_la.strftime(f"%Y-%m-%d %H:%M:%S {tz_abbr}"),
+        "stocks":    results,
     }
