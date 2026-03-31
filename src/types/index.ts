@@ -355,3 +355,51 @@ export interface DuckScreenerResult {
   scan_time?: string;
   stocks: DuckStock[];
 }
+
+// ─── Unusual Options Screener Types ───────────────────────────────
+
+export interface OptionsContract {
+  type: "CALL" | "PUT";
+  strike: number;
+  expiry: string;
+  volume: number;
+  oi: number;
+  ratio: number;
+  iv: number;
+  last: number;
+}
+
+export interface OptionsSignal {
+  name: string;
+  direction: "BULLISH" | "BEARISH" | "BUY_SIGNAL" | "MIXED";
+  data: Record<string, unknown>;
+}
+
+export interface OptionsStockInfo {
+  name: string;
+  sector: string;
+  "2x": string;
+  "3x": string;
+  inv2x: string;
+  inv3x: string;
+}
+
+export interface OptionsStock {
+  ticker: string;
+  info: OptionsStockInfo;
+  price: number;
+  change_1d: number;
+  change_5d: number;
+  high_52w: number;
+  drop_52w: number;
+  stars: number;
+  overall: "BUY" | "BEARISH" | "WARNING" | null;
+  signals: OptionsSignal[];
+}
+
+export interface OptionsScreenerResult {
+  date: string;
+  scan_time: string;
+  stocks: OptionsStock[];
+  params: Record<string, number>;
+}

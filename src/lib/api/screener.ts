@@ -15,6 +15,7 @@ import type {
   DuckScreenerResult,
   DuckStock,
   DuckChartData,
+  OptionsScreenerResult,
 } from "@/types";
 
 // ─── Backend URLs ─────────────────────────────────────────────────
@@ -565,3 +566,140 @@ function generateDuckPriceSeries(endPrice: number, n: number): number[] {
   const scale = endPrice / arr[arr.length - 1];
   return arr.map((v) => v * scale);
 }
+
+// ─── Options Flow Public API ──────────────────────────────────────
+
+export async function fetchOptionsScreener(): Promise<OptionsScreenerResult> {
+  if (BACKEND_URL) {
+    const res = await fetch(`${BACKEND_URL}/api/screener/options`);
+    if (res.status === 404) return MOCK_OPTIONS_DATA;
+    if (!res.ok) throw new Error(`Options screener API error: ${res.status}`);
+    return res.json();
+  }
+  await new Promise((r) => setTimeout(r, 600));
+  return MOCK_OPTIONS_DATA;
+}
+
+export async function fetchOptionsStatus(): Promise<ScanStatus> {
+  if (!BACKEND_URL) return { status: "idle" };
+  try {
+    const res = await fetch(`${BACKEND_URL}/api/screener/options/status`);
+    if (!res.ok) return { status: "idle" };
+    return res.json();
+  } catch {
+    return { status: "idle" };
+  }
+}
+
+export async function triggerOptionsScan(): Promise<void> {
+  if (!BACKEND_URL) return;
+  const res = await fetch(`${BACKEND_URL}/api/screener/options/run`, {
+    method: "POST",
+    headers: { "X-API-Key": SCAN_API_KEY },
+  });
+  if (!res.ok && res.status !== 202) throw new Error(`Options trigger error: ${res.status}`);
+}
+
+// ─── Options Mock Data ────────────────────────────────────────────
+
+export const MOCK_OPTIONS_DATA: OptionsScreenerResult = {
+  date: "2026-03-29",
+  scan_time: "07:00",
+  stocks: [
+    {
+      ticker: "NVDA",
+      info: { name: "英伟达", sector: "半导体", "2x": "NVDL", "3x": "NVDX", inv2x: "NVD", inv3x: "-" },
+      price: 865.30, change_1d: -3.2, change_5d: -9.5,
+      high_52w: 974.00, drop_52w: -11.2,
+      stars: 4, overall: "BUY",
+      signals: [
+        {
+          name: "UNUSUAL_VOLUME", direction: "BULLISH",
+          data: {
+            contracts: [
+              { type: "CALL", strike: 900, expiry: "2026-04-17", volume: 8420, oi: 1850, ratio: 4.6, iv: 52.3, last: 12.50 },
+              { type: "CALL", strike: 880, expiry: "2026-04-17", volume: 6100, oi: 980,  ratio: 6.2, iv: 48.1, last: 18.90 },
+              { type: "PUT",  strike: 820, expiry: "2026-04-17", volume: 3200, oi: 740,  ratio: 4.3, iv: 55.6, last: 9.30  },
+            ],
+            uv_call_vol: 14520, uv_put_vol: 3200,
+          },
+        },
+        {
+          name: "LOW_PUT_CALL_RATIO", direction: "BULLISH",
+          data: { pc_ratio: 0.38, threshold: 0.5, call_vol: 42800, put_vol: 16300 },
+        },
+        {
+          name: "HEAVY_CALL_FLOW", direction: "BULLISH",
+          data: { call_vol: 14520, put_vol: 3200, ratio: 4.5 },
+        },
+      ],
+    },
+    {
+      ticker: "SPY",
+      info: { name: "标普500", sector: "大盘指数", "2x": "SSO", "3x": "UPRO", inv2x: "SDS", inv3x: "SPXU" },
+      price: 512.40, change_1d: -1.8, change_5d: -5.2,
+      high_52w: 578.00, drop_52w: -11.3,
+      stars: 2, overall: "BUY",
+      signals: [
+        {
+          name: "UNUSUAL_VOLUME", direction: "BULLISH",
+          data: {
+            contracts: [
+              { type: "CALL", strike: 530, expiry: "2026-04-03", volume: 52000, oi: 14500, ratio: 3.6, iv: 22.1, last: 3.80 },
+              { type: "CALL", strike: 520, expiry: "2026-04-03", volume: 38500, oi: 9800,  ratio: 3.9, iv: 20.4, last: 6.50 },
+            ],
+            uv_call_vol: 90500, uv_put_vol: 0,
+          },
+        },
+        {
+          name: "LOW_PUT_CALL_RATIO", direction: "BULLISH",
+          data: { pc_ratio: 0.44, threshold: 0.5, call_vol: 285000, put_vol: 126000 },
+        },
+      ],
+    },
+    {
+      ticker: "TSLA",
+      info: { name: "特斯拉", sector: "新能源车", "2x": "TSLR", "3x": "TSLT", inv2x: "TSDD", inv3x: "-" },
+      price: 172.80, change_1d: -6.4, change_5d: -18.2,
+      high_52w: 358.64, drop_52w: -51.8,
+      stars: 2, overall: "WARNING",
+      signals: [
+        {
+          name: "UNUSUAL_VOLUME", direction: "BEARISH",
+          data: {
+            contracts: [
+              { type: "PUT", strike: 160, expiry: "2026-04-17", volume: 18500, oi: 4200, ratio: 4.4, iv: 78.5, last: 8.40 },
+              { type: "PUT", strike: 150, expiry: "2026-04-17", volume: 12300, oi: 3100, ratio: 4.0, iv: 82.1, last: 5.60 },
+            ],
+            uv_call_vol: 0, uv_put_vol: 30800,
+          },
+        },
+        {
+          name: "HIGH_PUT_OI", direction: "BEARISH",
+          data: { put_oi: 285000, call_oi: 142000, ratio: 2.01 },
+        },
+        {
+          name: "DIP_BUY_SIGNAL:52WK_DROP+5D_DROP+INTRADAY", direction: "BUY_SIGNAL",
+          data: {
+            triggers: ["Intraday drop: -6.4%", "5-day drop: -18.2%", "From 52-week high: -51.8%"],
+            drop_52w: -51.8, drop_5d: -18.2, drop_1d: -6.4,
+            pc_ratio: 1.82, call_vol: 98000, put_vol: 178000,
+            notable_calls: [
+              { type: "CALL", strike: 180, expiry: "2026-04-17", volume: 6200, oi: 1450, ratio: 4.3, iv: 75.2, last: 5.10 },
+            ],
+          },
+        },
+      ],
+    },
+  ],
+  params: {
+    uv_vol_oi_ratio: 3.0,
+    uv_min_volume: 500,
+    pc_bull_threshold: 0.5,
+    hpi_ratio: 1.5,
+    hcf_ratio: 3.0,
+    dip_52w_drop: -30.0,
+    dip_5d_drop: -10.0,
+    dip_1d_drop: -5.0,
+  },
+};

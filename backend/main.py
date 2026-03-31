@@ -14,6 +14,10 @@ Endpoints:
   GET  /api/screener/duck/status      — check duck scan status
   POST /api/screener/duck/run         — trigger a duck scan (requires X-API-Key header)
 
+  GET  /api/screener/options          — return cached unusual-options scan results
+  GET  /api/screener/options/status   — check options scan status
+  POST /api/screener/options/run      — trigger an options scan (requires X-API-Key header)
+
 Required env vars:
   API_KEY                  — protects the /run endpoints
   UPSTASH_REDIS_REST_URL   — from Upstash console
@@ -31,10 +35,12 @@ from redis_client import (
     get_result, get_status, set_result, set_status,
     get_volume_result, get_volume_status, set_volume_result, set_volume_status,
     get_duck_result, get_duck_status, set_duck_result, set_duck_status,
+    get_options_result, get_options_status, set_options_result, set_options_status,
 )
 from screener import run_full_scan
 from screener_volume import run_volume_scan
 from screener_duck import run_duck_scan
+from screener_options import run_options_scan
 
 # ─── App ──────────────────────────────────────────────────────────
 
@@ -47,10 +53,11 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-API_KEY          = os.environ.get("API_KEY", "")
-_executor        = ThreadPoolExecutor(max_workers=1)   # one divergence scan at a time
-_volume_executor = ThreadPoolExecutor(max_workers=1)   # one volume scan at a time
-_duck_executor   = ThreadPoolExecutor(max_workers=1)   # one duck scan at a time
+API_KEY           = os.environ.get("API_KEY", "")
+_executor         = ThreadPoolExecutor(max_workers=1)   # one divergence scan at a time
+_volume_executor  = ThreadPoolExecutor(max_workers=1)   # one volume scan at a time
+_duck_executor    = ThreadPoolExecutor(max_workers=1)   # one duck scan at a time
+_options_executor = ThreadPoolExecutor(max_workers=1)   # one options scan at a time
 
 
 # ─── Endpoints ────────────────────────────────────────────────────
@@ -184,6 +191,48 @@ async def trigger_duck_scan(
     return {"message": "duck scan started"}
 
 
+# ─── Options Flow Endpoints ──────────────────────────────────────
+
+@app.get("/api/screener/options")
+def get_options():
+    """Returns the most recent unusual-options scan results from Redis cache."""
+    data = get_options_result()
+    if data is None:
+        raise HTTPException(
+            status_code=404,
+            detail="No options scan results yet. Trigger a scan first via POST /api/screener/options/run",
+        )
+    return data
+
+
+@app.get("/api/screener/options/status")
+def get_options_scan_status():
+    """Returns current options scan status: idle | running | done | error."""
+    return get_options_status()
+
+
+@app.post("/api/screener/options/run", status_code=202)
+async def trigger_options_scan(
+    background_tasks: BackgroundTasks,
+    x_api_key: str = Header(None),
+):
+    """
+    Triggers an async background unusual-options scan.
+    Requires X-API-Key header matching the API_KEY env var.
+    Returns 202 immediately; poll /api/screener/options/status for progress.
+    """
+    if not API_KEY or x_api_key != API_KEY:
+        raise HTTPException(status_code=401, detail="Invalid or missing API key")
+
+    current = get_options_status()
+    if current.get("status") == "running":
+        return {"message": "options scan already running", "status": current}
+
+    set_options_status("running")
+    background_tasks.add_task(_run_options_scan_task)
+    return {"message": "options scan started"}
+
+
 # ─── Background tasks ─────────────────────────────────────────────
 
 async def _run_scan_task() -> None:
@@ -214,3 +263,13 @@ async def _run_duck_scan_task() -> None:
         set_duck_status("done")
     except Exception as exc:
         set_duck_status("error", error=str(exc)[:200])
+
+
+async def _run_options_scan_task() -> None:
+    loop = asyncio.get_event_loop()
+    try:
+        result = await loop.run_in_executor(_options_executor, run_options_scan)
+        set_options_result(result)
+        set_options_status("done")
+    except Exception as exc:
+        set_options_status("error", error=str(exc)[:200])

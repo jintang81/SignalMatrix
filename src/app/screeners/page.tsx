@@ -40,15 +40,6 @@ const BULL_SIGNAL: Screener[] = [
     href: "/screeners/duck-bill",
     available: true,
   },
-  {
-    id: "unusual-options",
-    name: "UNUSUAL OPTIONS",
-    nameZh: "异常期权信号",
-    desc: "扫描异常大单期权成交，捕捉机构/主力的方向性押注与隐含信息。",
-    tags: ["期权异常", "大单扫描", "机构动向", "隐含波动率"],
-    href: "/screeners/unusual-options",
-    available: false,
-  },
 ];
 
 const BEAR_SIGNAL: Screener[] = [
@@ -78,6 +69,18 @@ const BEAR_SIGNAL: Screener[] = [
     tags: ["均线形态", "趋势加速", "空头排列"],
     href: "/screeners/inverted-duck-bill",
     available: false,
+  },
+];
+
+const OPTIONS_FLOW: Screener[] = [
+  {
+    id: "unusual-options",
+    name: "UNUSUAL OPTIONS FLOW",
+    nameZh: "异常期权信号",
+    desc: "扫描期权异常成交量(Vol≥3×OI)并综合5个模型评分，识别机构暗注方向与隐含看涨/看跌信号。",
+    tags: ["期权流", "异常成交", "机构方向", "Put/Call 比率"],
+    href: "/screeners/unusual-options",
+    available: true,
   },
 ];
 
@@ -198,6 +201,12 @@ export default function ScreeerPage() {
         titleZh="空头信号"
         accent="#ff1744"
         screeners={BEAR_SIGNAL}
+      />
+      <Section
+        title="OPTIONS FLOW"
+        titleZh="期权异常信号"
+        accent="#4f9cf9"
+        screeners={OPTIONS_FLOW}
       />
       <Section
         title="AI STRATEGY"
