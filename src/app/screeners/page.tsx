@@ -178,9 +178,9 @@ function Section({
 
 export default function ScreeerPage() {
   return (
-    <div className="py-6 space-y-6 min-h-[calc(100dvh-3.5rem)]">
+    <div className="py-4 space-y-4 min-h-[calc(100dvh-3.5rem)]">
       {/* Header */}
-      <div className="panel p-5">
+      <div className="panel p-4">
         <p className="text-sm tracking-[0.18em] text-muted mb-1">SCREENERS</p>
         <p className="text-xs text-muted/60">
           基于预定义信号逻辑的美股筛选器，每日定时扫描 · 支持盘中按需触发

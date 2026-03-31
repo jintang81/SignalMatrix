@@ -24,10 +24,17 @@ services:
     buildCommand: pip install requests
     startCommand: >-
       python -c "
-      import requests, os, sys;
-      url = os.environ['BACKEND_URL'] + '/api/screener/run';
+      import requests, os, sys, time;
+      base = os.environ['BACKEND_URL'];
       key = os.environ['API_KEY'];
-      r = requests.post(url, headers={'X-API-Key': key}, timeout=30);
+      print('Waking up service...');
+      for i in range(6):
+          try:
+              r = requests.get(base + '/', timeout=20);
+              if r.status_code == 200: print('Service awake'); break
+          except Exception as e: print(f'Attempt {i+1} failed: {e}')
+          time.sleep(15);
+      r = requests.post(base + '/api/screener/run', headers={'X-API-Key': key}, timeout=60);
       print(r.status_code, r.text);
       sys.exit(0 if r.status_code in (200, 202) else 1)
       "
@@ -47,10 +54,17 @@ services:
     buildCommand: pip install requests
     startCommand: >-
       python -c "
-      import requests, os, sys;
-      url = os.environ['BACKEND_URL'] + '/api/screener/volume/run';
+      import requests, os, sys, time;
+      base = os.environ['BACKEND_URL'];
       key = os.environ['API_KEY'];
-      r = requests.post(url, headers={'X-API-Key': key}, timeout=30);
+      print('Waking up service...');
+      for i in range(6):
+          try:
+              r = requests.get(base + '/', timeout=20);
+              if r.status_code == 200: print('Service awake'); break
+          except Exception as e: print(f'Attempt {i+1} failed: {e}')
+          time.sleep(15);
+      r = requests.post(base + '/api/screener/volume/run', headers={'X-API-Key': key}, timeout=60);
       print(r.status_code, r.text);
       sys.exit(0 if r.status_code in (200, 202) else 1)
       "
