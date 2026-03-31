@@ -311,3 +311,47 @@ export interface VolumeSurgeScreenerResult {
     min_market_cap_b: number;
   };
 }
+
+// ─── Duck Bill Screener Types ──────────────────────────────────────
+
+export interface DuckChartData {
+  dates: string[];
+  open: number[];
+  high: number[];
+  low: number[];
+  close: number[];
+  volume: number[];
+  diff: number[];
+  dea: number[];
+  hist: number[];
+}
+
+export interface DuckDetail {
+  diff_latest: number;
+  dea_latest: number;
+  hist_latest: number;
+  gap_ratio_min: number;        // % price-relative proximity to DEA at Phase B
+  bars_since_reversal: number;  // bars since Phase C started (≤3)
+  diverge_angle: number;        // duck bill opening angle in degrees
+  reversal_date: string;
+}
+
+export interface DuckStock {
+  ticker: string;
+  is_etf: boolean;
+  price: number;
+  pct_change: number;
+  mktcap_b: number | null;
+  ma5: number;
+  ma10: number;
+  ma20: number;
+  vol_ratio: number;
+  duck: DuckDetail;
+  chart: DuckChartData;
+}
+
+export interface DuckScreenerResult {
+  date: string;
+  scan_time?: string;
+  stocks: DuckStock[];
+}

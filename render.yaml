@@ -73,3 +73,33 @@ services:
         sync: false
       - key: API_KEY
         sync: false
+
+  # ── Cron Job (daily duck bill scan trigger) ────────────────────
+  # Calls POST /api/screener/duck/run every weekday at 6:00 PM ET (22:00 UTC)
+  - type: cron
+    name: signalmatrix-daily-duck-scan
+    runtime: python
+    rootDir: backend
+    schedule: "0 22 * * 1-5"
+    buildCommand: pip install requests
+    startCommand: >-
+      python -c "
+      import requests, os, sys, time;
+      base = os.environ['BACKEND_URL'];
+      key = os.environ['API_KEY'];
+      print('Waking up service...');
+      for i in range(6):
+          try:
+              r = requests.get(base + '/', timeout=20);
+              if r.status_code == 200: print('Service awake'); break
+          except Exception as e: print(f'Attempt {i+1} failed: {e}')
+          time.sleep(15);
+      r = requests.post(base + '/api/screener/duck/run', headers={'X-API-Key': key}, timeout=60);
+      print(r.status_code, r.text);
+      sys.exit(0 if r.status_code in (200, 202) else 1)
+      "
+    envVars:
+      - key: BACKEND_URL
+        sync: false
+      - key: API_KEY
+        sync: false

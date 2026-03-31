@@ -84,3 +84,37 @@ def set_volume_status(status: str, **extra) -> None:
     if status == "running":
         payload["started_at"] = now
     _get_redis().setex(VOLUME_KEY_STATUS, TTL, json.dumps(payload))
+
+
+# ─── Duck Bill helpers ────────────────────────────────────────────
+
+DUCK_KEY_RESULT = "screener:duck:result"
+DUCK_KEY_STATUS = "screener:duck:status"
+
+
+def get_duck_result() -> dict | None:
+    """Returns the last duck scan result, or None if not yet available."""
+    raw = _get_redis().get(DUCK_KEY_RESULT)
+    if raw is None:
+        return None
+    return json.loads(raw) if isinstance(raw, str) else raw
+
+
+def set_duck_result(data: dict) -> None:
+    _get_redis().setex(DUCK_KEY_RESULT, TTL, json.dumps(data, ensure_ascii=False))
+
+
+def get_duck_status() -> dict:
+    """Returns status dict; defaults to {"status": "idle"} if key missing."""
+    raw = _get_redis().get(DUCK_KEY_STATUS)
+    if raw is None:
+        return {"status": "idle"}
+    return json.loads(raw) if isinstance(raw, str) else raw
+
+
+def set_duck_status(status: str, **extra) -> None:
+    now = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+    payload: dict = {"status": status, "updated_at": now, **extra}
+    if status == "running":
+        payload["started_at"] = now
+    _get_redis().setex(DUCK_KEY_STATUS, TTL, json.dumps(payload))

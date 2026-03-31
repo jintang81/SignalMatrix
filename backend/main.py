@@ -10,6 +10,10 @@ Endpoints:
   GET  /api/screener/volume/status    — check volume scan status
   POST /api/screener/volume/run       — trigger a volume scan (requires X-API-Key header)
 
+  GET  /api/screener/duck             — return cached duck-bill scan results
+  GET  /api/screener/duck/status      — check duck scan status
+  POST /api/screener/duck/run         — trigger a duck scan (requires X-API-Key header)
+
 Required env vars:
   API_KEY                  — protects the /run endpoints
   UPSTASH_REDIS_REST_URL   — from Upstash console
@@ -26,9 +30,11 @@ from fastapi.middleware.cors import CORSMiddleware
 from redis_client import (
     get_result, get_status, set_result, set_status,
     get_volume_result, get_volume_status, set_volume_result, set_volume_status,
+    get_duck_result, get_duck_status, set_duck_result, set_duck_status,
 )
 from screener import run_full_scan
 from screener_volume import run_volume_scan
+from screener_duck import run_duck_scan
 
 # ─── App ──────────────────────────────────────────────────────────
 
@@ -44,6 +50,7 @@ app.add_middleware(
 API_KEY          = os.environ.get("API_KEY", "")
 _executor        = ThreadPoolExecutor(max_workers=1)   # one divergence scan at a time
 _volume_executor = ThreadPoolExecutor(max_workers=1)   # one volume scan at a time
+_duck_executor   = ThreadPoolExecutor(max_workers=1)   # one duck scan at a time
 
 
 # ─── Endpoints ────────────────────────────────────────────────────
@@ -135,6 +142,48 @@ async def trigger_volume_scan(
     return {"message": "volume scan started"}
 
 
+# ─── Duck Bill Endpoints ──────────────────────────────────────────
+
+@app.get("/api/screener/duck")
+def get_duck():
+    """Returns the most recent duck-bill scan results from Redis cache."""
+    data = get_duck_result()
+    if data is None:
+        raise HTTPException(
+            status_code=404,
+            detail="No duck scan results yet. Trigger a scan first via POST /api/screener/duck/run",
+        )
+    return data
+
+
+@app.get("/api/screener/duck/status")
+def get_duck_scan_status():
+    """Returns current duck scan status: idle | running | done | error."""
+    return get_duck_status()
+
+
+@app.post("/api/screener/duck/run", status_code=202)
+async def trigger_duck_scan(
+    background_tasks: BackgroundTasks,
+    x_api_key: str = Header(None),
+):
+    """
+    Triggers an async background duck-bill scan.
+    Requires X-API-Key header matching the API_KEY env var.
+    Returns 202 immediately; poll /api/screener/duck/status for progress.
+    """
+    if not API_KEY or x_api_key != API_KEY:
+        raise HTTPException(status_code=401, detail="Invalid or missing API key")
+
+    current = get_duck_status()
+    if current.get("status") == "running":
+        return {"message": "duck scan already running", "status": current}
+
+    set_duck_status("running")
+    background_tasks.add_task(_run_duck_scan_task)
+    return {"message": "duck scan started"}
+
+
 # ─── Background tasks ─────────────────────────────────────────────
 
 async def _run_scan_task() -> None:
@@ -155,3 +204,13 @@ async def _run_volume_scan_task() -> None:
         set_volume_status("done")
     except Exception as exc:
         set_volume_status("error", error=str(exc)[:200])
+
+
+async def _run_duck_scan_task() -> None:
+    loop = asyncio.get_event_loop()
+    try:
+        result = await loop.run_in_executor(_duck_executor, run_duck_scan)
+        set_duck_result(result)
+        set_duck_status("done")
+    except Exception as exc:
+        set_duck_status("error", error=str(exc)[:200])

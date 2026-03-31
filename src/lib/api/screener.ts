@@ -12,6 +12,9 @@ import type {
   VolumeSurgeScreenerResult,
   VolumeSurgeStock,
   VolumeSurgeChartData,
+  DuckScreenerResult,
+  DuckStock,
+  DuckChartData,
 } from "@/types";
 
 // ─── Backend URLs ─────────────────────────────────────────────────
@@ -92,6 +95,40 @@ export async function triggerVolumeScan(): Promise<void> {
     headers: { "X-API-Key": SCAN_API_KEY },
   });
   if (!res.ok && res.status !== 202) throw new Error(`Volume trigger error: ${res.status}`);
+}
+
+// ─── Duck Bill Public API ─────────────────────────────────────────
+
+export async function fetchDuckScreener(): Promise<DuckScreenerResult> {
+  if (BACKEND_URL) {
+    const res = await fetch(`${BACKEND_URL}/api/screener/duck`);
+    // 404 = no scan run yet — fall back to mock data
+    if (res.status === 404) return MOCK_DUCK_DATA;
+    if (!res.ok) throw new Error(`Duck screener API error: ${res.status}`);
+    return res.json();
+  }
+  await new Promise((r) => setTimeout(r, 600));
+  return MOCK_DUCK_DATA;
+}
+
+export async function fetchDuckStatus(): Promise<ScanStatus> {
+  if (!BACKEND_URL) return { status: "idle" };
+  try {
+    const res = await fetch(`${BACKEND_URL}/api/screener/duck/status`);
+    if (!res.ok) return { status: "idle" };
+    return res.json();
+  } catch {
+    return { status: "idle" };
+  }
+}
+
+export async function triggerDuckScan(): Promise<void> {
+  if (!BACKEND_URL) return;
+  const res = await fetch(`${BACKEND_URL}/api/screener/duck/run`, {
+    method: "POST",
+    headers: { "X-API-Key": SCAN_API_KEY },
+  });
+  if (!res.ok && res.status !== 202) throw new Error(`Duck trigger error: ${res.status}`);
 }
 
 // ─── Mock Data ────────────────────────────────────────────────────
@@ -424,6 +461,107 @@ function generateVolumePriceSeries(startPrice: number, endPrice: number, n: numb
     arr.push(Math.max(base + noise, 0.01));
   }
   // Normalize so last = endPrice
+  const scale = endPrice / arr[arr.length - 1];
+  return arr.map((v) => v * scale);
+}
+
+// ─── Duck Bill Mock Data ──────────────────────────────────────────
+
+export const MOCK_DUCK_DATA: DuckScreenerResult = {
+  date: "2026-03-29",
+  scan_time: "2026-03-29 18:02:45 PDT",
+  stocks: [
+    makeMockDuckStock("NVDA",  875.40, +2.31, 2150.0, 1.8, false, 38.5, 0.021, 2),
+    makeMockDuckStock("MSFT",  378.90, +0.87, 2810.0, 1.6, false, 31.2, 0.035, 1),
+    makeMockDuckStock("AAPL",  172.50, +1.15, 2680.0, 1.4, false, 28.9, 0.018, 3),
+    makeMockDuckStock("SMH",   196.20, +0.78, null,   2.1, true,  44.3, 0.028, 2),
+    makeMockDuckStock("QQQ",   432.60, +1.02, null,   1.3, true,  29.7, 0.022, 1),
+  ],
+};
+
+function makeMockDuckStock(
+  ticker: string,
+  price: number,
+  pctChange: number,
+  mktcapB: number | null,
+  volRatio: number,
+  isEtf: boolean,
+  divergeAngle: number,
+  gapRatioMin: number,
+  barsSinceReversal: number,
+): DuckStock {
+  const N = 60;
+  // Generate a rising price series for a bullish duck bill stock
+  const closes = generateDuckPriceSeries(price, N);
+  const open:   number[] = [];
+  const high:   number[] = [];
+  const low:    number[] = [];
+  const volume: number[] = [];
+
+  for (let i = 0; i < N; i++) {
+    const c = closes[i];
+    const range = c * (0.008 + Math.random() * 0.012);
+    const o = c + (Math.random() - 0.52) * range; // slight bull bias
+    open.push(+o.toFixed(2));
+    high.push(+(Math.max(c, o) + Math.random() * range * 0.5).toFixed(2));
+    low.push( +(Math.min(c, o) - Math.random() * range * 0.5).toFixed(2));
+    volume.push(Math.round(5e6 + Math.random() * 20e6));
+  }
+
+  // Build MACD that exhibits the duck bill pattern above zero
+  const macdRes = calcMACDArr(closes);
+
+  // Shift MACD series upward to simulate "above zero axis" condition
+  const diffShift = Math.max(0, -Math.min(...macdRes.diff.map(v => v ?? 0))) + price * 0.002;
+  const diff = macdRes.diff.map(v => +((v ?? 0) + diffShift).toFixed(4));
+  const dea  = macdRes.dea.map(v  => +((v ?? 0) + diffShift * 0.7).toFixed(4));
+  const hist = diff.map((v, i) => +((v - dea[i]) * 2).toFixed(4));
+
+  const dates = generateDates(N);
+  const chart: DuckChartData = {
+    dates,
+    open, high, low,
+    close: closes.map((v) => +v.toFixed(2)),
+    volume,
+    diff, dea, hist,
+  };
+
+  // Compute MA values from price series
+  const ma5  = +closes.slice(-5).reduce((a,b)=>a+b,0)/5;
+  const ma10 = +closes.slice(-10).reduce((a,b)=>a+b,0)/10;
+  const ma20 = +closes.slice(-20).reduce((a,b)=>a+b,0)/20;
+
+  const reversal_date = generateDates(N)[N - 1 - barsSinceReversal] ?? "2026-03-28";
+
+  return {
+    ticker, is_etf: isEtf, price, pct_change: pctChange,
+    mktcap_b: mktcapB, ma5: +ma5.toFixed(2), ma10: +ma10.toFixed(2), ma20: +ma20.toFixed(2),
+    vol_ratio: volRatio,
+    duck: {
+      diff_latest:         diff[diff.length - 1],
+      dea_latest:          dea[dea.length - 1],
+      hist_latest:         hist[hist.length - 1],
+      gap_ratio_min:       +(gapRatioMin * 100).toFixed(3),
+      bars_since_reversal: barsSinceReversal,
+      diverge_angle:       divergeAngle,
+      reversal_date,
+    },
+    chart,
+  };
+}
+
+function generateDuckPriceSeries(endPrice: number, n: number): number[] {
+  // Rising trend with a brief pullback in the middle (duck bill shape)
+  const arr: number[] = [];
+  const startPrice = endPrice * 0.88;
+  for (let i = 0; i < n; i++) {
+    const t = i / (n - 1);
+    // base trend up, with a dip around 60-70% of the way
+    const dip = Math.exp(-((t - 0.65) ** 2) / 0.01) * 0.03;
+    const base = startPrice + (endPrice - startPrice) * t - endPrice * dip;
+    const noise = base * (Math.random() - 0.48) * 0.015;
+    arr.push(Math.max(base + noise, endPrice * 0.5));
+  }
   const scale = endPrice / arr[arr.length - 1];
   return arr.map((v) => v * scale);
 }

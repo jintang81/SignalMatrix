@@ -35,10 +35,10 @@ const BULL_SIGNAL: Screener[] = [
     id: "duck-bill",
     name: "DUCK BILL",
     nameZh: "正鸭嘴形态",
-    desc: "短期均线加速上穿长期均线，均线呈鸭嘴张开，趋势加速做多信号。",
-    tags: ["均线形态", "趋势加速", "多头排列"],
+    desc: "MACD DIFF 超速上穿 DEA 形成正鸭嘴形态，全程零轴上方 — 趋势加速初期强势做多信号。",
+    tags: ["MACD 形态", "趋势加速", "零轴上方", "多头排列"],
     href: "/screeners/duck-bill",
-    available: false,
+    available: true,
   },
   {
     id: "unusual-options",
