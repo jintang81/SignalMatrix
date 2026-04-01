@@ -218,3 +218,37 @@ def set_top_div_status(status: str, **extra) -> None:
     if status == "running":
         payload["started_at"] = now
     _get_redis().setex(TOP_DIV_KEY_STATUS, TTL, json.dumps(payload))
+
+
+# ─── AI Strategy helpers ──────────────────────────────────────────
+
+AI_STRATEGY_KEY_RESULT = "screener:ai-strategy:result"
+AI_STRATEGY_KEY_STATUS = "screener:ai-strategy:status"
+
+
+def get_ai_strategy_result() -> dict | None:
+    """Returns the last AI strategy result, or None if not yet available."""
+    raw = _get_redis().get(AI_STRATEGY_KEY_RESULT)
+    if raw is None:
+        return None
+    return json.loads(raw) if isinstance(raw, str) else raw
+
+
+def set_ai_strategy_result(data: dict) -> None:
+    _get_redis().setex(AI_STRATEGY_KEY_RESULT, TTL, json.dumps(data, ensure_ascii=False))
+
+
+def get_ai_strategy_status() -> dict:
+    """Returns status dict; defaults to {"status": "idle"} if key missing."""
+    raw = _get_redis().get(AI_STRATEGY_KEY_STATUS)
+    if raw is None:
+        return {"status": "idle"}
+    return json.loads(raw) if isinstance(raw, str) else raw
+
+
+def set_ai_strategy_status(status: str, **extra) -> None:
+    now = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+    payload: dict = {"status": status, "updated_at": now, **extra}
+    if status == "running":
+        payload["started_at"] = now
+    _get_redis().setex(AI_STRATEGY_KEY_STATUS, TTL, json.dumps(payload))

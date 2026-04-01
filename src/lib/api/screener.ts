@@ -22,6 +22,7 @@ import type {
   TopVolumeSurgeScreenerResult,
   TopVolumeSurgeStock,
   TopVolumeSurgeChartData,
+  AIStrategyResult,
 } from "@/types";
 
 // ─── Backend URLs ─────────────────────────────────────────────────
@@ -1002,6 +1003,82 @@ function generateTopVolPriceSeries(startPrice: number, endPrice: number, n: numb
   const scale = endPrice / arr[arr.length - 1];
   return arr.map((v) => v * scale);
 }
+
+// ─── AI Strategy Public API ───────────────────────────────────────
+
+export async function fetchAIStrategy(): Promise<AIStrategyResult> {
+  if (BACKEND_URL) {
+    const res = await fetch(`${BACKEND_URL}/api/strategy`);
+    if (res.status === 404) return MOCK_AI_STRATEGY_DATA;
+    if (!res.ok) throw new Error(`AI strategy API error: ${res.status}`);
+    return res.json();
+  }
+  await new Promise((r) => setTimeout(r, 600));
+  return MOCK_AI_STRATEGY_DATA;
+}
+
+export async function fetchAIStrategyStatus(): Promise<ScanStatus> {
+  if (!BACKEND_URL) return { status: "idle" };
+  try {
+    const res = await fetch(`${BACKEND_URL}/api/strategy/status`);
+    if (!res.ok) return { status: "idle" };
+    return res.json();
+  } catch {
+    return { status: "idle" };
+  }
+}
+
+export async function triggerAIStrategy(): Promise<void> {
+  if (!BACKEND_URL) return;
+  const res = await fetch(`${BACKEND_URL}/api/strategy/run`, {
+    method: "POST",
+    headers: { "X-API-Key": SCAN_API_KEY },
+  });
+  if (!res.ok && res.status !== 202) throw new Error(`AI strategy trigger error: ${res.status}`);
+}
+
+// ─── AI Strategy Mock Data ────────────────────────────────────────
+
+export const MOCK_AI_STRATEGY_DATA: AIStrategyResult = {
+  environment: "NEUTRAL",
+  confidence: 0.62,
+  risk_level: "HIGH",
+  summary:
+    "市场处于高度不确定状态，SPY 在 200 日均线下方震荡，VIX 维持在 22 以上高位。板块轮动分散、缺乏主线，建议以期权异常信号为主要参考，严控仓位，等待方向明朗。",
+  recommended_screeners: ["unusual-options", "bottom-divergence", "bottom-volume-surge"],
+  avoid_screeners: ["duck-bill", "top-divergence"],
+  key_levels: {
+    spy_support: 452.0,
+    spy_resistance: 475.0,
+    vix_warning: 25.0,
+  },
+  strategy_notes:
+    "当前市场处于技术性修正阶段，SPY 已跌破 50 日均线，距 200 日均线支撑约 2%。QQQ 表现略弱于大盘，科技板块承压明显。VIX 在 22 附近震荡，尚未达到恐慌性抛售的极值区域（30+），说明市场仍在有序调整而非恐慌出逃。\n\n板块层面，能源（XLE）和医疗（XLV）相对抗跌，具有防御价值。金融（XLF）随利率预期波动较大。科技（XLK）短期超卖但趋势尚未逆转。\n\n操盘建议：降低主动方向性仓位，重点关注异常期权信号捕捉机构暗注方向。若 SPY 有效守住 452 支撑并伴随缩量，可考虑小仓位布局底背离标的。日内交易者可参考 VIX 波动择机，避免在 VIX 快速拉升时追空。",
+  market_metrics: {
+    spy_price: 462.5,
+    spy_change_1d: -1.2,
+    spy_change_5d: -3.8,
+    spy_vs_ma50: -2.1,
+    spy_vs_ma200: 0.8,
+    qqq_price: 387.2,
+    qqq_change_1d: -1.9,
+    qqq_change_5d: -5.3,
+    vix: 22.4,
+    vix_change_1d: 4.8,
+    iwm_change_5d: -4.1,
+  },
+  sectors: {
+    XLK:  { name: "科技",     price: 215.3, change_1d: -1.8, change_5d: -5.2, vs_ma50: -3.1 },
+    XLF:  { name: "金融",     price:  45.8, change_1d: -0.9, change_5d: -2.1, vs_ma50: -1.2 },
+    XLE:  { name: "能源",     price:  87.2, change_1d:  0.4, change_5d:  1.8, vs_ma50:  2.3 },
+    XLV:  { name: "医疗",     price: 138.5, change_1d:  0.2, change_5d:  0.5, vs_ma50:  0.8 },
+    XLI:  { name: "工业",     price: 120.1, change_1d: -0.6, change_5d: -2.8, vs_ma50: -1.9 },
+    XLY:  { name: "消费可选", price: 178.4, change_1d: -2.1, change_5d: -6.4, vs_ma50: -4.2 },
+    XLC:  { name: "通信服务", price:  82.6, change_1d: -1.4, change_5d: -4.1, vs_ma50: -2.6 },
+    XLRE: { name: "房地产",   price:  37.9, change_1d: -0.3, change_5d: -1.5, vs_ma50: -0.9 },
+  },
+  scan_time: "2026-03-31 09:15:00 PDT",
+};
 
 function makeMockRsiTopDetail(
   closes: number[],

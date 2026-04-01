@@ -38,6 +38,7 @@ from redis_client import (
     get_options_result, get_options_status, set_options_result, set_options_status,
     get_top_div_result, get_top_div_status, set_top_div_result, set_top_div_status,
     get_top_vol_result, get_top_vol_status, set_top_vol_result, set_top_vol_status,
+    get_ai_strategy_result, get_ai_strategy_status, set_ai_strategy_result, set_ai_strategy_status,
 )
 from screener import run_full_scan
 from screener_volume import run_volume_scan
@@ -45,6 +46,7 @@ from screener_duck import run_duck_scan
 from screener_options import run_options_scan
 from screener_top_divergence import run_top_divergence_scan
 from screener_top_volume import run_top_volume_scan
+from ai_strategy import run_ai_strategy
 
 # ─── App ──────────────────────────────────────────────────────────
 
@@ -64,6 +66,7 @@ _duck_executor    = ThreadPoolExecutor(max_workers=1)   # one duck scan at a tim
 _options_executor = ThreadPoolExecutor(max_workers=1)   # one options scan at a time
 _top_div_executor = ThreadPoolExecutor(max_workers=1)   # one top-divergence scan at a time
 _top_vol_executor = ThreadPoolExecutor(max_workers=1)   # one top-volume scan at a time
+_ai_strategy_executor = ThreadPoolExecutor(max_workers=1)  # one AI strategy at a time
 
 
 # ─── Endpoints ────────────────────────────────────────────────────
@@ -323,6 +326,48 @@ async def trigger_top_volume_scan(
     return {"message": "top-volume scan started"}
 
 
+# ─── AI Strategy Endpoints ───────────────────────────────────────
+
+@app.get("/api/strategy")
+def get_ai_strategy():
+    """Returns the most recent AI strategy result from Redis cache."""
+    data = get_ai_strategy_result()
+    if data is None:
+        raise HTTPException(
+            status_code=404,
+            detail="No AI strategy yet. Trigger generation via POST /api/strategy/run",
+        )
+    return data
+
+
+@app.get("/api/strategy/status")
+def get_ai_strategy_status_endpoint():
+    """Returns current AI strategy status: idle | running | done | error."""
+    return get_ai_strategy_status()
+
+
+@app.post("/api/strategy/run", status_code=202)
+async def trigger_ai_strategy(
+    background_tasks: BackgroundTasks,
+    x_api_key: str = Header(None),
+):
+    """
+    Triggers async AI strategy generation.
+    Requires X-API-Key header. Returns 202 immediately;
+    poll /api/strategy/status for completion.
+    """
+    if not API_KEY or x_api_key != API_KEY:
+        raise HTTPException(status_code=401, detail="Invalid or missing API key")
+
+    current = get_ai_strategy_status()
+    if current.get("status") == "running":
+        return {"message": "AI strategy already running", "status": current}
+
+    set_ai_strategy_status("running")
+    background_tasks.add_task(_run_ai_strategy_task)
+    return {"message": "AI strategy generation started"}
+
+
 # ─── Background tasks ─────────────────────────────────────────────
 
 async def _run_scan_task() -> None:
@@ -383,3 +428,13 @@ async def _run_top_vol_scan_task() -> None:
         set_top_vol_status("done")
     except Exception as exc:
         set_top_vol_status("error", error=str(exc)[:200])
+
+
+async def _run_ai_strategy_task() -> None:
+    loop = asyncio.get_event_loop()
+    try:
+        result = await loop.run_in_executor(_ai_strategy_executor, run_ai_strategy)
+        set_ai_strategy_result(result)
+        set_ai_strategy_status("done")
+    except Exception as exc:
+        set_ai_strategy_status("error", error=str(exc)[:200])

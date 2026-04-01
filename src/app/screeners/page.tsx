@@ -89,10 +89,10 @@ const AI_STRATEGY: Screener[] = [
     id: "ai-strategy",
     name: "AI STRATEGY",
     nameZh: "AI 综合策略",
-    desc: "结合市场环境、技术信号与 AI 分析生成每日综合操作策略，持续开发中。",
-    tags: ["Claude AI", "综合策略", "市场环境", "每日更新"],
+    desc: "Claude AI 实时分析 SPY/QQQ/VIX 与板块数据，生成市场环境判断、推荐筛选器组合与详细操盘策略简报。",
+    tags: ["Claude claude-opus-4-6", "市场环境", "筛选器推荐", "按需生成"],
     href: "/screeners/ai-strategy",
-    available: false,
+    available: true,
   },
 ];
 

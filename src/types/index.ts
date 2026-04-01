@@ -474,3 +474,51 @@ export interface TopVolumeSurgeScreenerResult {
     min_market_cap_b: number;
   };
 }
+
+// ─── AI Strategy ─────────────────────────────────────────────────
+
+export type AIStrategyEnvironment = "BULL" | "BEAR" | "NEUTRAL" | "CHOPPY";
+export type AIStrategyRiskLevel  = "LOW" | "MEDIUM" | "HIGH" | "EXTREME";
+
+export interface AIStrategyMarketMetrics {
+  spy_price:     number;
+  spy_change_1d: number;
+  spy_change_5d: number;
+  spy_vs_ma50:   number;
+  spy_vs_ma200:  number;
+  qqq_price:     number;
+  qqq_change_1d: number;
+  qqq_change_5d: number;
+  vix:           number;
+  vix_change_1d: number;
+  iwm_change_5d: number;
+}
+
+export interface AIStrategySector {
+  name:       string;
+  price:      number;
+  change_1d:  number;
+  change_5d:  number;
+  change_20d?: number;
+  vs_ma50?:   number;
+}
+
+export interface AIStrategyKeyLevels {
+  spy_support:    number;
+  spy_resistance: number;
+  vix_warning:    number;
+}
+
+export interface AIStrategyResult {
+  environment:           AIStrategyEnvironment;
+  confidence:            number;
+  risk_level:            AIStrategyRiskLevel;
+  summary:               string;
+  recommended_screeners: string[];
+  avoid_screeners:       string[];
+  key_levels:            AIStrategyKeyLevels;
+  strategy_notes:        string;
+  market_metrics:        AIStrategyMarketMetrics;
+  sectors:               Record<string, AIStrategySector>;
+  scan_time?:            string;
+}
