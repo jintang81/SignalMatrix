@@ -19,6 +19,9 @@ import type {
   TopDivScreenerResult,
   TopDivStock,
   TopDivDetail,
+  TopVolumeSurgeScreenerResult,
+  TopVolumeSurgeStock,
+  TopVolumeSurgeChartData,
 } from "@/types";
 
 // ─── Backend URLs ─────────────────────────────────────────────────
@@ -863,6 +866,141 @@ function makeMockMacdTopDetail(
     hist_shrink_pct: +((1 - h2 / h1) * 100).toFixed(1),
     label: "MACD",
   };
+}
+
+// ─── Top Volume Surge Public API ─────────────────────────────────
+
+export async function fetchTopVolumeScreener(): Promise<TopVolumeSurgeScreenerResult> {
+  if (BACKEND_URL) {
+    const res = await fetch(`${BACKEND_URL}/api/screener/top-volume`);
+    if (res.status === 404) return MOCK_TOP_VOLUME_DATA;
+    if (!res.ok) throw new Error(`Top volume screener API error: ${res.status}`);
+    return res.json();
+  }
+  await new Promise((r) => setTimeout(r, 600));
+  return MOCK_TOP_VOLUME_DATA;
+}
+
+export async function fetchTopVolumeStatus(): Promise<ScanStatus> {
+  if (!BACKEND_URL) return { status: "idle" };
+  try {
+    const res = await fetch(`${BACKEND_URL}/api/screener/top-volume/status`);
+    if (!res.ok) return { status: "idle" };
+    return res.json();
+  } catch {
+    return { status: "idle" };
+  }
+}
+
+export async function triggerTopVolumeScan(): Promise<void> {
+  if (!BACKEND_URL) return;
+  const res = await fetch(`${BACKEND_URL}/api/screener/top-volume/run`, {
+    method: "POST",
+    headers: { "X-API-Key": SCAN_API_KEY },
+  });
+  if (!res.ok && res.status !== 202) throw new Error(`Top volume trigger error: ${res.status}`);
+}
+
+// ─── Top Volume Surge Mock Data ───────────────────────────────────
+
+export const MOCK_TOP_VOLUME_DATA: TopVolumeSurgeScreenerResult = {
+  date: "2026-03-29",
+  scan_time: "2026-03-29 17:40:00 PDT",
+  results: [
+    makeMockTopVolumeStock("NVDA",  865.30, 780.20, +12.5, 82100500, 91230100, 28340000, 2.90, 3.22, 2130000000000),
+    makeMockTopVolumeStock("META",  525.72, 460.80, +14.1, 38975085, 42780100, 16863405, 2.31, 2.54, 1329837768704),
+    makeMockTopVolumeStock("TSLA",  255.40, 221.80,  +8.3, 98432100, 103100300, 39560000, 2.49, 2.61, 812000000000),
+    makeMockTopVolumeStock("AAPL",  228.90, 198.60, +10.5, 52340200, 61120600, 22840000, 2.29, 2.68, 3480000000000),
+    makeMockTopVolumeStock("SMH",   238.40, 208.10, +11.6, 18340200, 21120600,  7540000, 2.43, 2.80, null),
+  ].filter(Boolean) as TopVolumeSurgeStock[],
+  params: {
+    volume_multiplier: 1.5,
+    ma50_period:       50,
+    vol_ma_period:     20,
+    min_market_cap_b:  0.3,
+  },
+};
+
+function makeMockTopVolumeStock(
+  ticker: string,
+  lastClose: number,
+  ma50: number,
+  ytdReturn: number,
+  lastVol: number,
+  prevVol: number,
+  volMa30: number,
+  volRatio: number,
+  volRatio2: number,
+  marketCap: number | null,
+): TopVolumeSurgeStock {
+  const N = 60;
+  const startPrice = ma50 * (1 - Math.abs(ytdReturn) / 100 * 0.4);
+  const closes = generateTopVolPriceSeries(startPrice, lastClose, N);
+
+  const open:   number[] = [];
+  const high:   number[] = [];
+  const low:    number[] = [];
+  const volume: number[] = [];
+
+  for (let i = 0; i < N; i++) {
+    const c = closes[i];
+    const range = c * (0.008 + Math.random() * 0.012);
+    const o = c + (Math.random() - 0.5) * range;
+    open.push(+o.toFixed(2));
+    high.push(+(Math.max(c, o) + Math.random() * range * 0.5).toFixed(2));
+    low.push( +(Math.min(c, o) - Math.random() * range * 0.5).toFixed(2));
+    if (i >= N - 2) {
+      volume.push(i === N - 1 ? lastVol : prevVol);
+    } else {
+      volume.push(Math.round(volMa30 * (0.6 + Math.random() * 0.8)));
+    }
+  }
+
+  const ma50Series: (number | null)[] = closes.map((_, i) => {
+    if (i < 49) return null;
+    return closes.slice(i - 49, i + 1).reduce((a, b) => a + b, 0) / 50;
+  });
+
+  const volMa30Series: (number | null)[] = volume.map((_, i) => {
+    if (i < 19) return null;
+    return volume.slice(i - 19, i + 1).reduce((a, b) => a + b, 0) / 20;
+  });
+
+  const dates = generateDates(N);
+  const chart: TopVolumeSurgeChartData = {
+    dates, open, high, low,
+    close:    closes.map((v) => +v.toFixed(2)),
+    volume,
+    ma50:     ma50Series.map((v) => v === null ? null : +v.toFixed(2)),
+    vol_ma30: volMa30Series.map((v) => v === null ? null : +v.toFixed(0)),
+  };
+
+  return {
+    ticker,
+    last_close: lastClose,
+    ma50,
+    ytd_return: ytdReturn,
+    last_vol:   lastVol,
+    prev_vol:   prevVol,
+    vol_ma30:   volMa30,
+    vol_ratio:  volRatio,
+    vol_ratio2: volRatio2,
+    market_cap: marketCap ?? 0,
+    chart,
+  };
+}
+
+function generateTopVolPriceSeries(startPrice: number, endPrice: number, n: number): number[] {
+  // Rising trend ending at endPrice (above MA50)
+  const arr: number[] = [];
+  for (let i = 0; i < n; i++) {
+    const t = i / (n - 1);
+    const base = startPrice + (endPrice - startPrice) * t;
+    const noise = base * (Math.random() - 0.5) * 0.02;
+    arr.push(Math.max(base + noise, 0.01));
+  }
+  const scale = endPrice / arr[arr.length - 1];
+  return arr.map((v) => v * scale);
 }
 
 function makeMockRsiTopDetail(

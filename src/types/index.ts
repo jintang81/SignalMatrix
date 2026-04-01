@@ -435,3 +435,42 @@ export interface OptionsScreenerResult {
   stocks: OptionsStock[];
   params: Record<string, number>;
 }
+
+// ─── Top Volume Surge ─────────────────────────────────────────────
+
+export interface TopVolumeSurgeChartData {
+  dates: string[];
+  open: number[];
+  high: number[];
+  low: number[];
+  close: number[];
+  volume: number[];
+  ma50: (number | null)[];
+  vol_ma30: (number | null)[];
+}
+
+export interface TopVolumeSurgeStock {
+  ticker: string;
+  last_close: number;
+  ma50: number;
+  ytd_return: number;      // positive percentage (above MA50, YTD > 0)
+  last_vol: number;
+  prev_vol: number;
+  vol_ma30: number;
+  vol_ratio: number;       // today vol / vol_ma30
+  vol_ratio2: number;      // yesterday vol / vol_ma30
+  market_cap: number;
+  chart: TopVolumeSurgeChartData;
+}
+
+export interface TopVolumeSurgeScreenerResult {
+  date: string;
+  scan_time?: string;
+  results: TopVolumeSurgeStock[];
+  params: {
+    volume_multiplier: number;
+    ma50_period: number;
+    vol_ma_period: number;
+    min_market_cap_b: number;
+  };
+}

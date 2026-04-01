@@ -154,6 +154,38 @@ def set_options_status(status: str, **extra) -> None:
     _get_redis().setex(OPTIONS_KEY_STATUS, TTL, json.dumps(payload))
 
 
+# ─── Top Volume Surge helpers ─────────────────────────────────────
+
+TOP_VOL_KEY_RESULT = "screener:top-volume:result"
+TOP_VOL_KEY_STATUS = "screener:top-volume:status"
+
+
+def get_top_vol_result() -> dict | None:
+    raw = _get_redis().get(TOP_VOL_KEY_RESULT)
+    if raw is None:
+        return None
+    return json.loads(raw) if isinstance(raw, str) else raw
+
+
+def set_top_vol_result(data: dict) -> None:
+    _get_redis().setex(TOP_VOL_KEY_RESULT, TTL, json.dumps(data, ensure_ascii=False))
+
+
+def get_top_vol_status() -> dict:
+    raw = _get_redis().get(TOP_VOL_KEY_STATUS)
+    if raw is None:
+        return {"status": "idle"}
+    return json.loads(raw) if isinstance(raw, str) else raw
+
+
+def set_top_vol_status(status: str, **extra) -> None:
+    now = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+    payload: dict = {"status": status, "updated_at": now, **extra}
+    if status == "running":
+        payload["started_at"] = now
+    _get_redis().setex(TOP_VOL_KEY_STATUS, TTL, json.dumps(payload))
+
+
 # ─── Top Divergence helpers ───────────────────────────────────────
 
 TOP_DIV_KEY_RESULT = "screener:top-divergence:result"

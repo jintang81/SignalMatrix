@@ -59,7 +59,7 @@ const BEAR_SIGNAL: Screener[] = [
     desc: "价格高位异常放量，判断主力出货与顶部信号。",
     tags: ["顶部放量", "主力出货", "成交量异常"],
     href: "/screeners/top-volume-surge",
-    available: false,
+    available: true,
   },
   {
     id: "inverted-duck-bill",
