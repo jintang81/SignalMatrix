@@ -36,11 +36,13 @@ from redis_client import (
     get_volume_result, get_volume_status, set_volume_result, set_volume_status,
     get_duck_result, get_duck_status, set_duck_result, set_duck_status,
     get_options_result, get_options_status, set_options_result, set_options_status,
+    get_top_div_result, get_top_div_status, set_top_div_result, set_top_div_status,
 )
 from screener import run_full_scan
 from screener_volume import run_volume_scan
 from screener_duck import run_duck_scan
 from screener_options import run_options_scan
+from screener_top_divergence import run_top_divergence_scan
 
 # ─── App ──────────────────────────────────────────────────────────
 
@@ -58,6 +60,7 @@ _executor         = ThreadPoolExecutor(max_workers=1)   # one divergence scan at
 _volume_executor  = ThreadPoolExecutor(max_workers=1)   # one volume scan at a time
 _duck_executor    = ThreadPoolExecutor(max_workers=1)   # one duck scan at a time
 _options_executor = ThreadPoolExecutor(max_workers=1)   # one options scan at a time
+_top_div_executor = ThreadPoolExecutor(max_workers=1)   # one top-divergence scan at a time
 
 
 # ─── Endpoints ────────────────────────────────────────────────────
@@ -233,6 +236,48 @@ async def trigger_options_scan(
     return {"message": "options scan started"}
 
 
+# ─── Top Divergence Endpoints ────────────────────────────────────
+
+@app.get("/api/screener/top-divergence")
+def get_top_divergence():
+    """Returns the most recent top-divergence scan results from Redis cache."""
+    data = get_top_div_result()
+    if data is None:
+        raise HTTPException(
+            status_code=404,
+            detail="No top-divergence scan results yet. Trigger a scan first via POST /api/screener/top-divergence/run",
+        )
+    return data
+
+
+@app.get("/api/screener/top-divergence/status")
+def get_top_divergence_status():
+    """Returns current top-divergence scan status: idle | running | done | error."""
+    return get_top_div_status()
+
+
+@app.post("/api/screener/top-divergence/run", status_code=202)
+async def trigger_top_divergence_scan(
+    background_tasks: BackgroundTasks,
+    x_api_key: str = Header(None),
+):
+    """
+    Triggers an async background top-divergence scan.
+    Requires X-API-Key header matching the API_KEY env var.
+    Returns 202 immediately; poll /api/screener/top-divergence/status for progress.
+    """
+    if not API_KEY or x_api_key != API_KEY:
+        raise HTTPException(status_code=401, detail="Invalid or missing API key")
+
+    current = get_top_div_status()
+    if current.get("status") == "running":
+        return {"message": "top-divergence scan already running", "status": current}
+
+    set_top_div_status("running")
+    background_tasks.add_task(_run_top_div_scan_task)
+    return {"message": "top-divergence scan started"}
+
+
 # ─── Background tasks ─────────────────────────────────────────────
 
 async def _run_scan_task() -> None:
@@ -273,3 +318,13 @@ async def _run_options_scan_task() -> None:
         set_options_status("done")
     except Exception as exc:
         set_options_status("error", error=str(exc)[:200])
+
+
+async def _run_top_div_scan_task() -> None:
+    loop = asyncio.get_event_loop()
+    try:
+        result = await loop.run_in_executor(_top_div_executor, run_top_divergence_scan)
+        set_top_div_result(result)
+        set_top_div_status("done")
+    except Exception as exc:
+        set_top_div_status("error", error=str(exc)[:200])

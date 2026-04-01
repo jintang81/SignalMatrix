@@ -50,7 +50,7 @@ const BEAR_SIGNAL: Screener[] = [
     desc: "价格创新高而 MACD 或 RSI 不创新高，识别潜在顶部做空/止盈信号。",
     tags: ["MACD 顶背离", "RSI 顶背离", "顶部反转"],
     href: "/screeners/top-divergence",
-    available: false,
+    available: true,
   },
   {
     id: "top-volume-surge",
@@ -98,34 +98,30 @@ const AI_STRATEGY: Screener[] = [
 
 // ─── Sub-components ───────────────────────────────────────────────
 
-function ScreenerCard({ s }: { s: Screener }) {
+function ScreenerCard({ s, accent }: { s: Screener; accent: string }) {
   if (s.available) {
     return (
       <Link
         href={s.href}
-        className="panel p-4 flex flex-col gap-2.5 cursor-pointer transition-all duration-200 hover:border-bull/40 hover:bg-bull/[0.02] hover:-translate-y-0.5"
+        className="panel p-3 flex flex-col gap-1.5 cursor-pointer transition-all duration-200 hover:-translate-y-0.5"
+        style={{ ["--card-accent" as string]: accent }}
       >
         <div className="flex items-start justify-between gap-2">
           <div>
             <div className="flex items-center gap-2 mb-0.5">
-              <p className="text-[11px] tracking-[0.12em] text-bull">{s.name}</p>
-              <span className="tag tag-up text-[9px]">已上线</span>
+              <p className="text-[11px] tracking-[0.12em]" style={{ color: accent }}>{s.name}</p>
+              <span className="tag text-[9px]" style={{ color: accent, borderColor: `color-mix(in srgb, ${accent} 40%, transparent)`, background: `color-mix(in srgb, ${accent} 8%, transparent)` }}>已上线</span>
             </div>
             <p className="text-[10px] text-muted/50 font-chinese">{s.nameZh}</p>
           </div>
           <span className="text-muted/30 mt-0.5">→</span>
         </div>
-        <p className="text-[11px] text-muted/60 leading-relaxed flex-1">{s.desc}</p>
-        <div className="flex flex-wrap gap-1">
-          {s.tags.map((t) => (
-            <span key={t} className="tag tag-muted text-[9px]">{t}</span>
-          ))}
-        </div>
+        <p className="text-[11px] text-muted/60 leading-relaxed">{s.desc}</p>
       </Link>
     );
   }
   return (
-    <div className="panel p-4 flex flex-col gap-2.5 opacity-35 cursor-default">
+    <div className="panel p-3 flex flex-col gap-1.5 opacity-35 cursor-default">
       <div>
         <div className="flex items-center gap-2 mb-0.5">
           <p className="text-[11px] tracking-[0.12em] text-muted">{s.name}</p>
@@ -133,12 +129,7 @@ function ScreenerCard({ s }: { s: Screener }) {
         </div>
         <p className="text-[10px] text-muted/50 font-chinese">{s.nameZh}</p>
       </div>
-      <p className="text-[11px] text-muted/60 leading-relaxed flex-1">{s.desc}</p>
-      <div className="flex flex-wrap gap-1">
-        {s.tags.map((t) => (
-          <span key={t} className="tag tag-muted text-[9px]">{t}</span>
-        ))}
-      </div>
+      <p className="text-[11px] text-muted/60 leading-relaxed">{s.desc}</p>
     </div>
   );
 }
@@ -170,7 +161,7 @@ function Section({
       {/* Cards grid */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
         {screeners.map((s) => (
-          <ScreenerCard key={s.id} s={s} />
+          <ScreenerCard key={s.id} s={s} accent={accent} />
         ))}
       </div>
     </div>
@@ -181,9 +172,9 @@ function Section({
 
 export default function ScreeerPage() {
   return (
-    <div className="py-4 space-y-4 min-h-[calc(100dvh-3.5rem)]">
+    <div className="py-3 space-y-3 min-h-[calc(100dvh-3.5rem)]">
       {/* Header */}
-      <div className="panel p-4">
+      <div className="panel p-3">
         <p className="text-sm tracking-[0.18em] text-muted mb-1">SCREENERS</p>
         <p className="text-xs text-muted/60">
           基于预定义信号逻辑的美股筛选器，每日定时扫描 · 支持盘中按需触发

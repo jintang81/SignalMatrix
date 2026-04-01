@@ -16,6 +16,9 @@ import type {
   DuckStock,
   DuckChartData,
   OptionsScreenerResult,
+  TopDivScreenerResult,
+  TopDivStock,
+  TopDivDetail,
 } from "@/types";
 
 // ─── Backend URLs ─────────────────────────────────────────────────
@@ -704,3 +707,181 @@ export const MOCK_OPTIONS_DATA: OptionsScreenerResult = {
     dip_1d_drop: -5.0,
   },
 };
+
+// ─── Top Divergence Public API ────────────────────────────────────
+
+export async function fetchTopDivScreener(): Promise<TopDivScreenerResult> {
+  if (BACKEND_URL) {
+    const res = await fetch(`${BACKEND_URL}/api/screener/top-divergence`);
+    if (res.status === 404) return MOCK_TOP_DIV_DATA;
+    if (!res.ok) throw new Error(`Top divergence screener API error: ${res.status}`);
+    return res.json();
+  }
+  await new Promise((r) => setTimeout(r, 600));
+  return MOCK_TOP_DIV_DATA;
+}
+
+export async function fetchTopDivStatus(): Promise<ScanStatus> {
+  if (!BACKEND_URL) return { status: "idle" };
+  try {
+    const res = await fetch(`${BACKEND_URL}/api/screener/top-divergence/status`);
+    if (!res.ok) return { status: "idle" };
+    return res.json();
+  } catch {
+    return { status: "idle" };
+  }
+}
+
+export async function triggerTopDivScan(): Promise<void> {
+  if (!BACKEND_URL) return;
+  const res = await fetch(`${BACKEND_URL}/api/screener/top-divergence/run`, {
+    method: "POST",
+    headers: { "X-API-Key": SCAN_API_KEY },
+  });
+  if (!res.ok && res.status !== 202) throw new Error(`Top divergence trigger error: ${res.status}`);
+}
+
+// ─── Top Divergence Mock Data ─────────────────────────────────────
+
+export const MOCK_TOP_DIV_DATA: TopDivScreenerResult = {
+  date: "2026-03-29",
+  scan_time: "2026-03-29 17:45:00 PDT",
+  stocks: [
+    makeMockTopDivStock("AAPL",  "MACD+RSI", 172.50, -1.25, 2680.0, 1.2, 74.5, false),
+    makeMockTopDivStock("TSLA",  "MACD",     182.40, -2.15, 1200.0, 1.5, 71.2, false),
+    makeMockTopDivStock("AMZN",  "RSI",      185.30, -0.95, 1800.0, 1.3, 72.8, false),
+    makeMockTopDivStock("QQQ",   "MACD",     432.60, -1.02, null,   1.6, 68.4, true),
+  ],
+};
+
+function makeMockTopDivStock(
+  ticker: string,
+  mode: TriggerMode,
+  price: number,
+  pctChange: number,
+  mktcapB: number | null,
+  volRatio: number,
+  rsiLatest: number,
+  isEtf: boolean,
+): TopDivStock {
+  const N = 120;
+  // Generate a declining price series ending at `price` (bearish)
+  const closes = generateTopDivPriceSeries(price, N);
+
+  const open:   number[] = [];
+  const high:   number[] = [];
+  const low:    number[] = [];
+  const volume: number[] = [];
+
+  for (let i = 0; i < N; i++) {
+    const c = closes[i];
+    const range = c * (0.008 + Math.random() * 0.012);
+    const o = c + (Math.random() - 0.5) * range;
+    open.push(+o.toFixed(2));
+    high.push(+(Math.max(c, o) + Math.random() * range * 0.5).toFixed(2));
+    low.push( +(Math.min(c, o) - Math.random() * range * 0.5).toFixed(2));
+    volume.push(Math.round(5e6 + Math.random() * 20e6));
+  }
+
+  const macdRes = calcMACDArr(closes);
+  const rsiArr  = calcRSIArr(closes);
+
+  const dates = generateDates(N);
+  const chart: DivergenceChartData = {
+    dates,
+    open, high, low,
+    close: closes.map((v) => +v.toFixed(2)),
+    volume,
+    diff: macdRes.diff.map((v) => +(v ?? 0).toFixed(4)),
+    dea:  macdRes.dea.map((v)  => +(v ?? 0).toFixed(4)),
+    hist: macdRes.hist.map((v) => +(v ?? 0).toFixed(4)),
+    rsi:  rsiArr.map((v)        => +(v ?? 50).toFixed(2)),
+  };
+
+  // Place p1 ~45-65 bars ago (depending on mode), p2 ~3 bars ago
+  const triggered: ("MACD" | "RSI")[] = [];
+  const details: TopDivStock["details"] = {};
+
+  const p2 = N - 1 - 3;
+  if (mode === "MACD" || mode === "MACD+RSI") {
+    triggered.push("MACD");
+    const gapBars = 45;
+    const p1 = p2 - gapBars;
+    details.macd = makeMockMacdTopDetail(closes, macdRes, p1, p2, gapBars);
+  }
+  if (mode === "RSI" || mode === "MACD+RSI") {
+    triggered.push("RSI");
+    const gapBars = 20;
+    const p1 = p2 - gapBars;
+    details.rsi = makeMockRsiTopDetail(closes, p1, p2, gapBars);
+  }
+
+  return {
+    ticker, is_etf: isEtf, price, pct_change: pctChange,
+    mktcap_b: mktcapB, vol_ratio: volRatio, rsi_latest: rsiLatest,
+    triggered, details, chart,
+  };
+}
+
+function generateTopDivPriceSeries(endPrice: number, n: number): number[] {
+  // Peak near 80% through, then declining to endPrice (top divergence shape)
+  const arr: number[] = [];
+  const startPrice = endPrice * 0.90;
+  for (let i = 0; i < n; i++) {
+    const t = i / (n - 1);
+    const peak = Math.exp(-((t - 0.75) ** 2) / 0.025) * endPrice * 0.12;
+    const base = startPrice + (endPrice - startPrice) * t + peak;
+    const noise = base * (Math.random() - 0.5) * 0.015;
+    arr.push(Math.max(base + noise, endPrice * 0.5));
+  }
+  const scale = endPrice / arr[arr.length - 1];
+  return arr.map((v) => v * scale);
+}
+
+function makeMockMacdTopDetail(
+  closes: number[],
+  macd: { diff: (number | null)[]; hist: (number | null)[] },
+  p1: number, p2: number, gapBars: number,
+): TopDivDetail {
+  const priceRise = ((closes[p2] - closes[p1]) / closes[p1]) * 100;
+  const d1 = Math.abs(macd.diff[p1] ?? 0.6);
+  const d2 = d1 * 0.65;  // indicator drops (top divergence)
+  const h1 = Math.abs(macd.hist[p1] ?? 0.9);
+  const h2 = h1 * 0.55;
+  return {
+    p1, p2,
+    price_p1: +closes[p1].toFixed(2),
+    price_p2: +closes[p2].toFixed(2),
+    indic_p1: +d1.toFixed(4),
+    indic_p2: +d2.toFixed(4),
+    gap_bars: gapBars,
+    price_rise_pct: +priceRise.toFixed(2),
+    indic_drop: +(d1 - d2).toFixed(4),
+    bars_ago: 3,
+    hist_p1: +h1.toFixed(4),
+    hist_p2: +h2.toFixed(4),
+    hist_shrink_pct: +((1 - h2 / h1) * 100).toFixed(1),
+    label: "MACD",
+  };
+}
+
+function makeMockRsiTopDetail(
+  closes: number[],
+  p1: number, p2: number, gapBars: number,
+): TopDivDetail {
+  const priceRise = ((closes[p2] - closes[p1]) / closes[p1]) * 100;
+  const r1 = 78;
+  const r2 = 72;  // overbought but lower than first peak
+  return {
+    p1, p2,
+    price_p1: +closes[p1].toFixed(2),
+    price_p2: +closes[p2].toFixed(2),
+    indic_p1: r1,
+    indic_p2: r2,
+    gap_bars: gapBars,
+    price_rise_pct: +priceRise.toFixed(2),
+    indic_drop: +(r1 - r2).toFixed(2),
+    bars_ago: 3,
+    label: "RSI",
+  };
+}

@@ -282,24 +282,28 @@ export default function DuckChart({ chart }: Props) {
     return () => ro.disconnect();
   }, [draw]);
 
-  // ── Wheel zoom ────────────────────────────────────────────────
-  const onWheel = useCallback((e: React.WheelEvent) => {
-    e.preventDefault();
+  // ── Wheel zoom (non-passive DOM listener to block page scroll) ─
+  useEffect(() => {
     const canvas = canvasRef.current;
     if (!canvas) return;
-    const rect = canvas.getBoundingClientRect();
-    const { start, end } = viewRef.current;
-    const visN   = end - start;
-    const factor = e.deltaY > 0 ? 1.2 : 1 / 1.2;
-    const newVis = Math.round(Math.max(10, Math.min(n, visN * factor)));
-    const ratio  = (e.clientX - rect.left) / rect.width;
-    const focalBar = start + visN * ratio;
-    let newStart = Math.round(focalBar - newVis * ratio);
-    let newEnd   = newStart + newVis;
-    if (newStart < 0) { newStart = 0; newEnd = newVis; }
-    if (newEnd > n)   { newEnd = n; newStart = n - newVis; }
-    viewRef.current = { start: Math.max(0, newStart), end: Math.min(n, newEnd) };
-    draw();
+    const onWheel = (e: WheelEvent) => {
+      e.preventDefault();
+      const rect = canvas.getBoundingClientRect();
+      const { start, end } = viewRef.current;
+      const visN   = end - start;
+      const factor = e.deltaY > 0 ? 1.2 : 1 / 1.2;
+      const newVis = Math.round(Math.max(10, Math.min(n, visN * factor)));
+      const ratio  = (e.clientX - rect.left) / rect.width;
+      const focalBar = start + visN * ratio;
+      let newStart = Math.round(focalBar - newVis * ratio);
+      let newEnd   = newStart + newVis;
+      if (newStart < 0) { newStart = 0; newEnd = newVis; }
+      if (newEnd > n)   { newEnd = n; newStart = n - newVis; }
+      viewRef.current = { start: Math.max(0, newStart), end: Math.min(n, newEnd) };
+      draw();
+    };
+    canvas.addEventListener("wheel", onWheel, { passive: false });
+    return () => canvas.removeEventListener("wheel", onWheel);
   }, [draw, n]);
 
   // ── Pointer drag ─────────────────────────────────────────────
@@ -334,7 +338,6 @@ export default function DuckChart({ chart }: Props) {
       <canvas
         ref={canvasRef}
         style={{ display: "block", width: "100%", height: totalH, cursor: "crosshair" }}
-        onWheel={onWheel}
         onPointerDown={onPointerDown}
         onPointerMove={onPointerMove}
         onPointerUp={onPointerUp}

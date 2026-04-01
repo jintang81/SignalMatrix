@@ -94,7 +94,7 @@ export default function BottomVolumeSurgePage() {
       await triggerVolumeScan();
       startPolling();
     } catch {
-      setScanStatus({ status: "error", error: "后端正在唤醒，请 30 秒后再试" });
+      setScanStatus({ status: "error", error: "触发扫描失败，请稍候重试" });
     }
   }, [startPolling]);
 
@@ -198,7 +198,7 @@ export default function BottomVolumeSurgePage() {
         <div className="panel p-6">
           <p className="text-sm text-dn/80">⚠ 无法加载数据</p>
           <p className="text-xs text-muted/40 mt-1">
-            后端可能正在唤醒（Render 免费版冷启动约需 30 秒），请稍候重试
+            暂无扫描数据，请点击「刷新」触发扫描
           </p>
           <button
             onClick={handleRetry}

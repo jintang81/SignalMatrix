@@ -357,6 +357,37 @@ export interface DuckScreenerResult {
   stocks: DuckStock[];
 }
 
+// ─── Top Divergence Screener Types ────────────────────────────────
+
+export interface TopDivDetail {
+  p1: number; p2: number;
+  price_p1: number; price_p2: number;
+  indic_p1: number; indic_p2: number;
+  gap_bars: number; price_rise_pct: number;
+  indic_drop: number; bars_ago: number;
+  hist_p1?: number; hist_p2?: number; hist_shrink_pct?: number;
+  label: "MACD" | "RSI";
+}
+
+export interface TopDivStock {
+  ticker: string;
+  is_etf: boolean;
+  price: number;
+  pct_change: number;
+  mktcap_b: number | null;
+  vol_ratio: number;
+  rsi_latest: number;
+  triggered: ("MACD" | "RSI")[];
+  details: { macd?: TopDivDetail; rsi?: TopDivDetail };
+  chart: DivergenceChartData;
+}
+
+export interface TopDivScreenerResult {
+  date: string;
+  scan_time?: string;
+  stocks: TopDivStock[];
+}
+
 // ─── Unusual Options Screener Types ───────────────────────────────
 
 export interface OptionsContract {

@@ -16,22 +16,34 @@ export default function Home() {
 
   return (
     <div className="py-6 space-y-4 min-h-[calc(100dvh-3.5rem)]">
-      {/* ── Stock Query ── */}
-      <section className="panel p-5">
-        <p className="text-sm tracking-[0.18em] text-muted mb-1">STOCK QUERY</p>
-        <p className="text-xs text-muted/60 mb-3">输入美股代码，查看基本信息、AI 综合评分与最新新闻</p>
-        <form onSubmit={handleSubmit} className="flex gap-2 max-w-sm">
-          <input
-            value={q}
-            onChange={(e) => setQ(e.target.value)}
-            placeholder="输入美股代码，如 AAPL"
-            className="flex-1 bg-bg-3 border border-border rounded px-3 py-1.5 text-xs font-trading text-txt placeholder:text-muted/40 focus:outline-none focus:border-gold/50"
-          />
-          <button type="submit" className="btn text-xs px-3 py-1.5">
-            QUERY →
-          </button>
-        </form>
-      </section>
+      {/* ── Top row: Stock Query + Options Flow ── */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+        <section className="panel p-5">
+          <p className="text-sm tracking-[0.18em] text-muted mb-1">STOCK QUERY</p>
+          <p className="text-xs text-muted/60 mb-3">输入美股代码，查看基本信息、AI 综合评分与最新新闻</p>
+          <form onSubmit={handleSubmit} className="flex gap-2 max-w-sm">
+            <input
+              value={q}
+              onChange={(e) => setQ(e.target.value)}
+              placeholder="输入美股代码，如 AAPL"
+              className="flex-1 bg-bg-3 border border-border rounded px-3 py-1.5 text-xs font-trading text-txt placeholder:text-muted/40 focus:outline-none focus:border-gold/50"
+            />
+            <button type="submit" className="btn text-xs px-3 py-1.5">
+              QUERY →
+            </button>
+          </form>
+        </section>
+
+        <Link href="/screeners/unusual-options" className="panel p-5 block hover:border-[#4f9cf9]/40 hover:bg-[#4f9cf9]/[0.02] transition-all duration-200">
+          <p className="text-sm tracking-[0.18em] mb-1" style={{ color: "#4f9cf9" }}>◈ OPTIONS FLOW</p>
+          <p className="text-xs text-muted/60 mb-3">扫描期权异常成交量，识别机构暗注方向与隐含看涨/看跌信号</p>
+          <div className="flex flex-wrap gap-2">
+            {["异常成交量", "Put/Call 比率", "机构方向"].map((name) => (
+              <span key={name} className="tag tag-muted">{name}</span>
+            ))}
+          </div>
+        </Link>
+      </div>
 
       {/* ── Indicators ── */}
       <section className="panel p-5">
@@ -58,10 +70,14 @@ export default function Home() {
         <p className="text-sm tracking-[0.18em] text-bull mb-1">● BULL SIGNAL</p>
         <p className="text-xs text-muted/60 mb-3">检测多头信号，寻找潜在做多机会</p>
         <div className="flex flex-wrap gap-2">
-          {["底背离", "底部放量", "正鸭嘴", "异常期权信号"].map((name) => (
-            <span key={name} className="tag tag-up">
-              {name}
-            </span>
+          {[
+            { name: "底背离",   href: "/screeners/bottom-divergence" },
+            { name: "底部放量", href: "/screeners/bottom-volume-surge" },
+            { name: "正鸭嘴",   href: "/screeners/duck-bill" },
+          ].map(({ name, href }) => (
+            <Link key={name} href={href}>
+              <span className="tag tag-up cursor-pointer hover:bg-bull/20 transition-colors">{name}</span>
+            </Link>
           ))}
         </div>
       </section>
