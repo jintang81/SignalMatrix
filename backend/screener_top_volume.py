@@ -4,7 +4,7 @@
 筛选条件：
   1. 股价 ≥ MA50（50日均线），处于上升趋势
   2. 年初至今收益为正（YTD return > 0）
-  3. 最近连续 2 天成交量 ≥ 20日均量 × 1.5x（顶部放量信号）
+  3. 今日成交量 ≥ 20日均量 × 2x（顶部放量信号）
 
 股票池：S&P500 + NASDAQ-100 + Russell 2000 代表性成分股（约 3000 只）
 数据源：Yahoo Finance v8 Chart API，经 Cloudflare Worker 代理
@@ -25,7 +25,7 @@ except ImportError:
 # ─── Core params ──────────────────────────────────────────────────
 LOOKBACK_DAYS     = 200
 MIN_MARKET_CAP    = 300e6
-VOLUME_MULTIPLIER = 1.5
+VOLUME_MULTIPLIER = 2.0
 MA50_PERIOD       = 50
 VOL_MA_PERIOD     = 20
 CHART_LEN         = 60
@@ -368,17 +368,17 @@ def screen_ticker(ticker):
     if ytd_return <= 0:
         return None
 
-    # Condition 3: recent 2 consecutive days volume >= 20-day avg × VOLUME_MULTIPLIER
-    if len(volumes) < VOL_MA_PERIOD + 2:
+    # Condition 3: today's volume >= 20-day avg × VOLUME_MULTIPLIER
+    if len(volumes) < VOL_MA_PERIOD + 1:
         return None
-    vol_ma = sum(volumes[-(VOL_MA_PERIOD + 2):-2]) / VOL_MA_PERIOD
+    vol_ma = sum(volumes[-(VOL_MA_PERIOD + 1):-1]) / VOL_MA_PERIOD
     if vol_ma <= 0:
         return None
     last_vol  = volumes[-1]
     prev_vol  = volumes[-2]
     vol_ratio  = last_vol / vol_ma
     vol_ratio2 = prev_vol / vol_ma
-    if vol_ratio < VOLUME_MULTIPLIER or vol_ratio2 < VOLUME_MULTIPLIER:
+    if vol_ratio < VOLUME_MULTIPLIER:
         return None
 
     # Build chart data (most recent CHART_LEN bars)

@@ -914,7 +914,7 @@ export const MOCK_TOP_VOLUME_DATA: TopVolumeSurgeScreenerResult = {
     makeMockTopVolumeStock("SMH",   238.40, 208.10, +11.6, 18340200, 21120600,  7540000, 2.43, 2.80, null),
   ].filter(Boolean) as TopVolumeSurgeStock[],
   params: {
-    volume_multiplier: 1.5,
+    volume_multiplier: 2.0,
     ma50_period:       50,
     vol_ma_period:     20,
     min_market_cap_b:  0.3,

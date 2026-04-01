@@ -156,8 +156,8 @@ export default function TopVolumeSurgePage() {
         </div>
 
         <p className="text-xs text-muted/60 leading-relaxed">
-          价格高于 MA50 且 YTD 为正，近 2 日连续成交量 ≥ 20 日均量 × 1.5x — 识别高位异常放量、潜在主力出货信号。
-          市值门槛 ≥ 300M · 均量基准取放量日前 20 日均值
+          价格高于 MA50 且 YTD 为正，今日成交量 ≥ 20 日均量 × 2x — 识别高位异常放量、潜在主力出货信号。
+          市值门槛 ≥ 300M · 均量基准取当日前 20 日均值
         </p>
 
         {isScanning && (

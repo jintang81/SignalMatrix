@@ -82,7 +82,7 @@ export default function StockCard({ stock: s }: Props) {
           均量 <span className="text-muted/80">{fmtVol(s.vol_ma30)}</span>
         </span>
         <span>
-          连续放量 <span className="text-dn">2 天</span>
+          今日放量 <span className="text-dn">{s.vol_ratio.toFixed(1)}x</span>
         </span>
       </div>
     </div>
