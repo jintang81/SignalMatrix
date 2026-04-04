@@ -52,6 +52,38 @@ from ai_strategy import run_ai_strategy
 
 app = FastAPI(title="SignalMatrix API", version="1.0.0")
 
+
+@app.on_event("startup")
+def _reset_stale_running_statuses():
+    """
+    On startup, reset any 'running' statuses left over from a previous process.
+    This prevents the frontend from polling forever after a Render restart/redeploy.
+    """
+    from redis_client import (
+        get_status, set_status,
+        get_volume_status, set_volume_status,
+        get_duck_status, set_duck_status,
+        get_options_status, set_options_status,
+        get_top_div_status, set_top_div_status,
+        get_top_vol_status, set_top_vol_status,
+        get_ai_strategy_status, set_ai_strategy_status,
+    )
+    for get_fn, set_fn in [
+        (get_status,           set_status),
+        (get_volume_status,    set_volume_status),
+        (get_duck_status,      set_duck_status),
+        (get_options_status,   set_options_status),
+        (get_top_div_status,   set_top_div_status),
+        (get_top_vol_status,   set_top_vol_status),
+        (get_ai_strategy_status, set_ai_strategy_status),
+    ]:
+        try:
+            if get_fn().get("status") == "running":
+                set_fn("idle")
+        except Exception:
+            pass
+
+
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
