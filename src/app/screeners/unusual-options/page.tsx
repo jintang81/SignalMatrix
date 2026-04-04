@@ -48,13 +48,14 @@ function LegendPanel() {
     <div className="panel overflow-hidden">
       <button
         onClick={() => setOpen(v => !v)}
-        className="w-full px-4 py-2.5 flex items-center justify-between text-left hover:bg-white/[0.02] transition-colors"
+        className="w-full px-4 py-2.5 flex items-center justify-between text-left hover:bg-white/[0.03] transition-colors"
       >
         <div className="flex items-center gap-2">
-          <span className="text-[10px] font-trading text-muted/50 tracking-wider">信号说明</span>
-          <span className="text-[9px] text-muted/30">6个模型 · 计星规则 · 综合评级</span>
+          <span className="text-[10px] text-[#4f9cf9]/70">ℹ</span>
+          <span className="text-[10px] font-trading text-muted/70 tracking-wider">信号说明</span>
+          <span className="text-[9px] text-muted/40">6个模型 · 计星规则 · 综合评级</span>
         </div>
-        <span className="text-muted/30 text-[10px]">{open ? "▲" : "▼"}</span>
+        <span className="text-muted/40 text-[10px]">{open ? "▲" : "▼"}</span>
       </button>
 
       {open && (

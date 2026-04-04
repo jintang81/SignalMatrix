@@ -4,10 +4,6 @@ import { useState } from "react";
 import type { OptionsStock } from "@/types";
 import { SignalBlock } from "./SignalBlock";
 
-const STARS_COLORS: Record<number, string> = {
-  5: "#00e676", 4: "#00e676", 3: "#c9a84c", 2: "#c9a84c", 1: "#94a3b8", 0: "#94a3b8",
-};
-
 const OVERALL_CONFIG: Record<string, { label: string; color: string; bg: string }> = {
   BUY:     { label: "BUY",       color: "#00e676", bg: "rgba(0,230,118,0.08)" },
   BEARISH: { label: "BEARISH",   color: "#ff1744", bg: "rgba(255,23,68,0.08)" },
@@ -15,8 +11,15 @@ const OVERALL_CONFIG: Record<string, { label: string; color: string; bg: string 
   WATCH:   { label: "WATCH",     color: "#4f9cf9", bg: "rgba(79,156,249,0.08)" },
 };
 
-function StarRating({ stars }: { stars: number }) {
-  const color = STARS_COLORS[stars] ?? "#94a3b8";
+function getStarColor(stars: number, overall: string | null): string {
+  if (overall === "BEARISH" || overall === "WARNING") {
+    return stars >= 3 ? "#ff1744" : stars >= 1 ? "#ef5350" : "#94a3b8";
+  }
+  return stars >= 4 ? "#00e676" : stars >= 2 ? "#c9a84c" : "#94a3b8";
+}
+
+function StarRating({ stars, overall }: { stars: number; overall: string | null }) {
+  const color = getStarColor(stars, overall);
   return (
     <span className="font-trading text-sm tracking-tighter">
       <span style={{ color }}> {"★".repeat(stars)}</span>
@@ -50,7 +53,7 @@ export function OptionsCard({ stock }: { stock: OptionsStock }) {
           <div className="flex items-center gap-2 flex-wrap">
             <span className="text-base font-trading font-bold text-txt">${stock.ticker}</span>
             <span className="tag tag-muted text-[9px]">{stock.info.sector}</span>
-            <StarRating stars={stock.stars} />
+            <StarRating stars={stock.stars} overall={stock.overall} />
             <span className="text-[10px] text-muted/40 font-trading">({stock.stars}/5)</span>
           </div>
           <div className="text-[10px] text-muted/50 font-chinese mt-0.5">{stock.info.name}</div>
