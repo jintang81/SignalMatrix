@@ -20,7 +20,7 @@ const SIGNAL_ROWS = [
   { code: "M3", name: "SUSTAINED FLOW",     color: "#c9a84c", desc: "5日累计净权利金绝对值 >$300K — 连续多日持续建仓，非单日脉冲" },
   { code: "M4", name: "OPENING POSITION",   color: "#4f9cf9", desc: "次日 OI 增加 → 确认新开仓而非平仓，降低假信号率" },
   { code: "M5", name: "HIGH PUT OI",        color: "#ff1744", desc: "Put/Call OI >1.5× — 市场隐含大规模下行对冲压力，风险警示" },
-  { code: "M6", name: "DIP BUY SIGNAL",     color: "#26a69a", desc: "多重跌幅触发（当日/5日/52周高点）中出现异常看涨押注，逆势信号" },
+  { code: "M6", name: "DIP BUY SIGNAL",     color: "#26a69a", desc: "多重跌幅触发（当日/5日/52周高点）+ M1 做多确认 — 机构在大跌时逆势建仓，仅在 M1 BULLISH 时计星" },
 ];
 
 const STAR_ROWS = [
@@ -30,7 +30,7 @@ const STAR_ROWS = [
   { rule: "方向一致 PREMIUM BIAS",    add: "+1★", note: "M2，需与 M1 同向" },
   { rule: "方向一致 SUSTAINED FLOW",  add: "+1★", note: "M3，需与 M1 同向" },
   { rule: "方向一致 OPENING POSITION",add: "+1★", note: "M4，需与 M1 同向" },
-  { rule: "DIP BUY 触发",       add: "+1★", note: "3条件全中 →+2★" },
+  { rule: "DIP BUY 触发",       add: "+1★", note: "需 M1 BULLISH；3条件全中 →+2★" },
 ];
 
 const OVERALL_ROWS = [
