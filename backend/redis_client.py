@@ -252,3 +252,33 @@ def set_ai_strategy_status(status: str, **extra) -> None:
     if status == "running":
         payload["started_at"] = now
     _get_redis().setex(AI_STRATEGY_KEY_STATUS, TTL, json.dumps(payload))
+
+
+# ─── Options v2: OI snapshot + flow history ───────────────────────
+
+OPTIONS_OI_SNAP_KEY   = "screener:options:oi_snapshot"
+OPTIONS_FLOW_HIST_KEY = "screener:options:flow_history"
+
+
+def get_options_oi_snapshot() -> dict:
+    """Returns { ticker → { 'strike|expiry|type' → oi } } from previous scan."""
+    raw = _get_redis().get(OPTIONS_OI_SNAP_KEY)
+    if raw is None:
+        return {}
+    return json.loads(raw) if isinstance(raw, str) else raw
+
+
+def set_options_oi_snapshot(data: dict) -> None:
+    _get_redis().setex(OPTIONS_OI_SNAP_KEY, TTL, json.dumps(data))
+
+
+def get_options_flow_history() -> dict:
+    """Returns { ticker → [{ date, net_call_premium }, ...] } (last 5 trading days)."""
+    raw = _get_redis().get(OPTIONS_FLOW_HIST_KEY)
+    if raw is None:
+        return {}
+    return json.loads(raw) if isinstance(raw, str) else raw
+
+
+def set_options_flow_history(data: dict) -> None:
+    _get_redis().setex(OPTIONS_FLOW_HIST_KEY, 7 * 24 * 3600, json.dumps(data))

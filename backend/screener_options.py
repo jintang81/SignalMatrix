@@ -1,17 +1,25 @@
 """
-异常期权信号扫描器
+异常期权信号扫描器 v2
 ==================
 数据源: Tradier API
-入口:   run_options_scan() → dict (JSON-serializable)
+入口:   run_options_scan() → dict
 
-信号模型（共5个，触发数量决定评级）：
-  1. UNUSUAL_VOLUME    — 单约 Vol ≥ 3× OI  ← 必须触发才入库
-  2. LOW_PUT_CALL_RATIO — Put/Call 成交量比 < 0.5（看涨）
-  3. HIGH_PUT_OI       — Put OI / Call OI > 1.5（看跌警示）
-  4. HEAVY_CALL_FLOW   — Unusual Call Vol ≥ 3× Unusual Put Vol
-  5. DIP_BUY_SIGNAL    — 52周高点跌幅 + 5日跌幅 + 当日跌幅同时满足
+v2 核心升级：
+  ① 买方主动性 (Ask-Side Aggression): last >= bid/ask 中点 → 买方主动扫单
+  ② 美元权利金门槛: vol × last × 100 ≥ $20k 入池，$100k → 机构级
+  ③ OTM 方向性过滤: Call strike > 当前价，Put strike < 当前价
+  ④ DTE 分组: 投机(0-7天) / 短期(8-30天) / 机构(31-90天) / 战略(90+天)
+  ⑤ 次日 OI 对比: 开仓 vs 平仓识别 (Redis OI 快照)
+  ⑥ 5日滚动权利金: 持续方向性资金流追踪 (Redis 历史)
+  ⑦ 按美元权利金加权评分，非信号触发数量
 
-综合评分：每个模型触发 +1星，★★★★★ 满分5
+信号模型 (v2):
+  M1. SMART_MONEY_SWEEP  — above_mid + OTM + premium≥$100k + DTE 8–90天
+  M2. PREMIUM_BIAS       — 全市场 Call vs Put 净权利金比率
+  M3. SUSTAINED_FLOW     — 5日累计净权利金 > $300k（连续方向性押注）
+  M4. OPENING_POSITION   — OI 次日增加 → 确认开新仓（非平仓）
+  M5. HIGH_PUT_OI        — Put OI / Call OI > 1.5（保留）
+  M6. DIP_BUY_SIGNAL     — 多重跌幅触发（保留）
 
 依赖: pip install requests
 """
@@ -21,27 +29,37 @@ import os
 
 import requests
 
+from redis_client import (
+    get_options_oi_snapshot, set_options_oi_snapshot,
+    get_options_flow_history, set_options_flow_history,
+)
+
 # ─────────────────────────────────────────────────────────────
 #  配置
 # ─────────────────────────────────────────────────────────────
 
 TRADIER_TOKEN   = os.environ.get("TRADIER_TOKEN", "")
-TRADIER_SANDBOX = False  # True=sandbox延迟数据
+TRADIER_SANDBOX = False
 
-# ── 信号参数 ──────────────────────────────────────────────────
-UV_VOL_OI_RATIO  = 3.0    # 单约 Vol/OI 最低倍数
-UV_MIN_VOLUME    = 500    # 单约最低成交量
-UV_MIN_OI        = 1      # 单约最低 OI
+# ── 入池门槛 ──────────────────────────────────────────────────
+UV_VOL_OI_RATIO         = 3.0       # vol/OI 最低倍数
+UV_MIN_VOLUME           = 500       # 单约最低成交量
+UV_MIN_OI               = 1         # 单约最低 OI
+UV_MIN_PREMIUM          = 20_000    # 入池最低美元权利金 ($20k)
+SMART_MONEY_MIN_PREMIUM = 100_000   # 机构级权利金 ($100k)
 
-PC_BULL_THRESHOLD = 0.5   # Put/Call < 此值 → 看涨
+# ── 各信号参数 ────────────────────────────────────────────────
+SUSTAINED_FLOW_THRESHOLD = 300_000  # 5日净权利金绝对值 ($300k)
+HPI_RATIO                = 1.5      # Put OI / Call OI 看跌警戒
+DIP_52W_DROP             = -30.0    # 距52周高点跌幅
+DIP_5D_DROP              = -10.0    # 5日跌幅
+DIP_1D_DROP              = -5.0     # 当日跌幅
 
-HPI_RATIO        = 1.5    # Put OI / Call OI > 此值 → 看跌警示
-
-HCF_RATIO        = 3.0    # Unusual Call Vol / Unusual Put Vol > 此值
-
-DIP_52W_DROP     = -30.0  # 距52周高点跌幅(%)，低于此值触发
-DIP_5D_DROP      = -10.0  # 5日跌幅(%)，低于此值触发
-DIP_1D_DROP      = -5.0   # 当日跌幅(%)，低于此值触发
+# ── DTE 分组边界 ──────────────────────────────────────────────
+DTE_SPECULATIVE   = 7    # 0–7天：投机/事件驱动（参考价值低）
+DTE_SHORT_TERM    = 30   # 8–30天：短期方向性
+DTE_INSTITUTIONAL = 90   # 31–90天：机构建仓（权重最高）
+                          # 90+天：战略/LEAPS
 
 # ─────────────────────────────────────────────────────────────
 #  股票池（85只股票+ETF，含对应杠杆ETF）
@@ -136,7 +154,7 @@ UNIVERSE = {
 }
 
 # ─────────────────────────────────────────────────────────────
-#  Tradier API helpers
+#  Tradier API helpers (unchanged)
 # ─────────────────────────────────────────────────────────────
 
 def _headers() -> dict:
@@ -155,19 +173,17 @@ def tradier_get(path: str, params: dict) -> dict:
         return {}
 
 def get_quote(ticker: str) -> dict:
-    """Returns {price, change_1d, high_52w}"""
     data = tradier_get("/markets/quotes", {"symbols": ticker, "greeks": "false"})
     q = data.get("quotes", {}).get("quote", {})
     if isinstance(q, list):
         q = q[0]
-    price   = float(q.get("last",       0) or 0)
-    prev    = float(q.get("prevclose",  0) or 0)
-    high52  = float(q.get("week_52_high", 0) or 0)
-    chg_1d  = ((price - prev) / prev * 100) if prev else 0
+    price  = float(q.get("last",         0) or 0)
+    prev   = float(q.get("prevclose",    0) or 0)
+    high52 = float(q.get("week_52_high", 0) or 0)
+    chg_1d = ((price - prev) / prev * 100) if prev else 0
     return {"price": price, "change_1d": round(chg_1d, 2), "high_52w": high52}
 
 def get_history_5d(ticker: str) -> float:
-    """Returns 5-day price change (%)"""
     try:
         end   = datetime.date.today()
         start = end - datetime.timedelta(days=10)
@@ -205,121 +221,283 @@ def get_option_chain(ticker: str, expiration: str) -> list:
     return o if isinstance(o, list) else [o]
 
 # ─────────────────────────────────────────────────────────────
-#  Options analysis
+#  Helpers
 # ─────────────────────────────────────────────────────────────
 
-def analyze_options(ticker: str) -> dict:
-    """Fetches option chains and returns aggregated stats."""
+def _dte_bucket(dte: int) -> str:
+    if dte <= DTE_SPECULATIVE:   return "SPECULATIVE"
+    if dte <= DTE_SHORT_TERM:    return "SHORT_TERM"
+    if dte <= DTE_INSTITUTIONAL: return "INSTITUTIONAL"
+    return "STRATEGIC"
+
+# ─────────────────────────────────────────────────────────────
+#  Options analysis (v2)
+# ─────────────────────────────────────────────────────────────
+
+def analyze_options(ticker: str, price: float, prev_oi_snap: dict) -> dict:
+    """
+    Fetches option chains and returns enriched stats.
+    prev_oi_snap: { 'strike|expiry|type' → oi } from previous scan
+    Returns new_oi_snap alongside analysis results.
+    """
     exps = get_option_expirations(ticker)
     if not exps:
         return {}
 
+    today = datetime.date.today()
     total_call_vol = total_put_vol = 0
     total_call_oi  = total_put_oi  = 0
+    total_call_premium = total_put_premium = 0.0
     unusual_calls: list = []
     unusual_puts:  list = []
+    new_oi_snap:   dict = {}
 
-    for exp in exps[:6]:
+    for exp in exps[:8]:
+        try:
+            exp_date = datetime.date.fromisoformat(exp)
+        except ValueError:
+            continue
+        dte    = max(0, (exp_date - today).days)
+        bucket = _dte_bucket(dte)
+
         contracts = get_option_chain(ticker, exp)
         for c in contracts:
-            vol   = int(c.get("volume",        0) or 0)
-            oi    = int(c.get("open_interest",  0) or 0)
-            ctype = (c.get("option_type") or "").lower()
+            vol    = int(c.get("volume",          0) or 0)
+            oi     = int(c.get("open_interest",   0) or 0)
+            ctype  = (c.get("option_type") or "").lower()
+            strike = float(c.get("strike",        0) or 0)
+            last   = float(c.get("last",          0) or 0)
+            bid    = float(c.get("bid",           0) or 0)
+            ask    = float(c.get("ask",           0) or 0)
+            iv     = float(c.get("implied_volatility", 0) or 0)
 
+            # ── OI snapshot for opening/closing detection ──
+            snap_key = f"{strike}|{exp}|{ctype}"
+            new_oi_snap[snap_key] = oi
+            prev_oi = prev_oi_snap.get(snap_key)
+            if prev_oi is None:
+                position_type = "UNKNOWN"
+            elif oi > prev_oi:
+                position_type = "OPENING"
+            elif oi < prev_oi:
+                position_type = "CLOSING"
+            else:
+                position_type = "UNCHANGED"
+
+            # ── Dollar premium ──────────────────────────────
+            premium = vol * last * 100
+
+            # ── Aggregate totals (before unusual filter) ────
             if ctype == "call":
                 total_call_vol += vol
                 total_call_oi  += oi
+                total_call_premium += premium
             else:
                 total_put_vol += vol
                 total_put_oi  += oi
+                total_put_premium += premium
 
-            # UV filter
-            if (vol >= UV_MIN_VOLUME and oi >= UV_MIN_OI
-                    and oi > 0 and vol / oi >= UV_VOL_OI_RATIO):
-                contract = {
-                    "type":   ctype.upper(),
-                    "strike": float(c.get("strike",             0) or 0),
-                    "expiry": exp,
-                    "volume": vol,
-                    "oi":     oi,
-                    "ratio":  round(vol / oi, 1),
-                    "iv":     round(float(c.get("implied_volatility", 0) or 0) * 100, 1),
-                    "last":   round(float(c.get("last",                0) or 0), 2),
-                }
-                if ctype == "call":
-                    unusual_calls.append(contract)
-                else:
-                    unusual_puts.append(contract)
+            # ── Above-mid (buyer-initiated) detection ───────
+            mid = (bid + ask) / 2.0 if (bid + ask) > 0 else last
+            above_mid = (last >= mid) if mid > 0 and last > 0 else False
 
-    unusual_call_vol = sum(c["volume"] for c in unusual_calls)
-    unusual_put_vol  = sum(c["volume"] for c in unusual_puts)
+            # ── OTM check ───────────────────────────────────
+            otm = (strike > price) if ctype == "call" else (strike < price)
+
+            # ── Unusual entry gate ──────────────────────────
+            if not (vol >= UV_MIN_VOLUME and oi >= UV_MIN_OI and oi > 0
+                    and vol / oi >= UV_VOL_OI_RATIO and premium >= UV_MIN_PREMIUM):
+                continue
+
+            # ── Smart money classification ──────────────────
+            smart_money = (
+                above_mid
+                and otm
+                and premium >= SMART_MONEY_MIN_PREMIUM
+                and bucket in ("SHORT_TERM", "INSTITUTIONAL")
+            )
+
+            contract = {
+                "type":          ctype.upper(),
+                "strike":        strike,
+                "expiry":        exp,
+                "dte":           dte,
+                "dte_bucket":    bucket,
+                "volume":        vol,
+                "oi":            oi,
+                "ratio":         round(vol / oi, 1),
+                "bid":           bid,
+                "ask":           ask,
+                "last":          last,
+                "mid":           round(mid, 2),
+                "above_mid":     above_mid,
+                "premium":       round(premium),
+                "iv":            round(iv * 100, 1),
+                "otm":           otm,
+                "smart_money":   smart_money,
+                "position_type": position_type,
+            }
+            if ctype == "call":
+                unusual_calls.append(contract)
+            else:
+                unusual_puts.append(contract)
+
+    # Sort by premium descending
+    unusual_calls.sort(key=lambda x: x["premium"], reverse=True)
+    unusual_puts.sort(key=lambda x: x["premium"],  reverse=True)
+
+    sm_calls = [c for c in unusual_calls if c["smart_money"]]
+    sm_puts  = [c for c in unusual_puts  if c["smart_money"]]
 
     return {
-        "total_call_vol":   total_call_vol,
-        "total_put_vol":    total_put_vol,
-        "total_call_oi":    total_call_oi,
-        "total_put_oi":     total_put_oi,
-        "unusual_calls":    sorted(unusual_calls, key=lambda x: x["volume"], reverse=True),
-        "unusual_puts":     sorted(unusual_puts,  key=lambda x: x["volume"], reverse=True),
-        "unusual_call_vol": unusual_call_vol,
-        "unusual_put_vol":  unusual_put_vol,
+        "total_call_vol":    total_call_vol,
+        "total_put_vol":     total_put_vol,
+        "total_call_oi":     total_call_oi,
+        "total_put_oi":      total_put_oi,
+        "total_call_premium": round(total_call_premium),
+        "total_put_premium":  round(total_put_premium),
+        "unusual_calls":     unusual_calls,
+        "unusual_puts":      unusual_puts,
+        "unusual_call_vol":  sum(c["volume"]  for c in unusual_calls),
+        "unusual_put_vol":   sum(c["volume"]  for c in unusual_puts),
+        "sm_calls":          sm_calls,
+        "sm_puts":           sm_puts,
+        "sm_call_premium":   sum(c["premium"] for c in sm_calls),
+        "sm_put_premium":    sum(c["premium"] for c in sm_puts),
+        "new_oi_snap":       new_oi_snap,
     }
 
 # ─────────────────────────────────────────────────────────────
-#  Signal models
+#  Signal models (v2)
 # ─────────────────────────────────────────────────────────────
 
-def run_signals(ticker: str, quote: dict, change_5d: float, opts: dict) -> dict:
-    """Runs all 5 signal models. Returns triggered signals and composite score."""
+def run_signals(ticker: str, quote: dict, change_5d: float,
+                opts: dict, flow_5d: dict) -> dict:
+    """
+    Runs all 6 signal models (v2).
+    flow_5d: { net_call_premium_5d, days } from Redis history.
+    Returns triggered signals + composite score.
+    """
     price    = quote["price"]
     chg_1d   = quote["change_1d"]
     high_52w = quote["high_52w"]
     signals: list = []
 
-    uv_calls    = opts["unusual_calls"]
-    uv_puts     = opts["unusual_puts"]
-    uv_call_vol = opts["unusual_call_vol"]
-    uv_put_vol  = opts["unusual_put_vol"]
+    sm_calls         = opts["sm_calls"]
+    sm_puts          = opts["sm_puts"]
+    sm_call_premium  = opts["sm_call_premium"]
+    sm_put_premium   = opts["sm_put_premium"]
+    unusual_calls    = opts["unusual_calls"]
+    unusual_puts     = opts["unusual_puts"]
 
-    # M1: UNUSUAL_VOLUME
-    if uv_calls or uv_puts:
-        if uv_calls and uv_puts:
-            direction = "MIXED"
-        elif uv_calls:
-            direction = "BULLISH"
+    # ── M1: SMART_MONEY_SWEEP ─────────────────────────────────
+    # Above-mid + OTM + $100k+ premium + DTE 8-90 days
+    has_sm = bool(sm_calls or sm_puts)
+    if has_sm:
+        if sm_calls and sm_puts:
+            if sm_call_premium >= sm_put_premium * 2:
+                sm_direction = "BULLISH"
+            elif sm_put_premium >= sm_call_premium * 2:
+                sm_direction = "BEARISH"
+            else:
+                sm_direction = "MIXED"
+        elif sm_calls:
+            sm_direction = "BULLISH"
         else:
-            direction = "BEARISH"
+            sm_direction = "BEARISH"
 
-        top_contracts = sorted(uv_calls + uv_puts,
-                               key=lambda x: x["volume"], reverse=True)[:5]
+        top_contracts = sorted(sm_calls + sm_puts,
+                                key=lambda x: x["premium"], reverse=True)[:5]
+        opening_count = sum(1 for c in top_contracts if c["position_type"] == "OPENING")
+
         signals.append({
-            "name":      "UNUSUAL_VOLUME",
-            "direction": direction,
+            "name":      "SMART_MONEY_SWEEP",
+            "direction": sm_direction,
             "data": {
-                "contracts":   top_contracts,
-                "uv_call_vol": uv_call_vol,
-                "uv_put_vol":  uv_put_vol,
+                "contracts":       top_contracts,
+                "sm_call_premium": sm_call_premium,
+                "sm_put_premium":  sm_put_premium,
+                "opening_count":   opening_count,
+                # Legacy fields for backward-compat with frontend rendering
+                "uv_call_vol":     opts["unusual_call_vol"],
+                "uv_put_vol":      opts["unusual_put_vol"],
             },
         })
+    else:
+        sm_direction = None
 
-    # M2: LOW_PUT_CALL_RATIO
-    total_call = opts["total_call_vol"]
-    total_put  = opts["total_put_vol"]
-    if total_call > 0 and total_put > 0:
-        pc_ratio = total_put / total_call
-        if pc_ratio < PC_BULL_THRESHOLD:
+    # ── M2: PREMIUM_BIAS ──────────────────────────────────────
+    # Replaces LOW_PUT_CALL_RATIO: use dollar premium ratio, not volume ratio
+    call_p = opts["total_call_premium"]
+    put_p  = opts["total_put_premium"]
+    if call_p > 0 and put_p > 0:
+        if call_p >= put_p * 2:
             signals.append({
-                "name":      "LOW_PUT_CALL_RATIO",
+                "name":      "PREMIUM_BIAS",
                 "direction": "BULLISH",
                 "data": {
-                    "pc_ratio":  round(pc_ratio, 2),
-                    "threshold": PC_BULL_THRESHOLD,
-                    "call_vol":  total_call,
-                    "put_vol":   total_put,
+                    "call_premium": call_p,
+                    "put_premium":  put_p,
+                    "ratio":        round(call_p / put_p, 2),
+                },
+            })
+        elif put_p >= call_p * 2:
+            signals.append({
+                "name":      "PREMIUM_BIAS",
+                "direction": "BEARISH",
+                "data": {
+                    "call_premium": call_p,
+                    "put_premium":  put_p,
+                    "ratio":        round(put_p / call_p, 2),
                 },
             })
 
-    # M3: HIGH_PUT_OI
+    # ── M3: SUSTAINED_FLOW ────────────────────────────────────
+    # Consecutive multi-day directional premium build-up
+    net_5d   = flow_5d.get("net_call_premium_5d", 0)
+    days_trk = flow_5d.get("days", 0)
+    if days_trk >= 2:
+        if net_5d > SUSTAINED_FLOW_THRESHOLD:
+            signals.append({
+                "name":      "SUSTAINED_CALL_FLOW",
+                "direction": "BULLISH",
+                "data": {
+                    "net_call_premium_5d": net_5d,
+                    "days_tracked":        days_trk,
+                    "threshold":           SUSTAINED_FLOW_THRESHOLD,
+                },
+            })
+        elif net_5d < -SUSTAINED_FLOW_THRESHOLD:
+            signals.append({
+                "name":      "SUSTAINED_PUT_FLOW",
+                "direction": "BEARISH",
+                "data": {
+                    "net_put_premium_5d": abs(net_5d),
+                    "days_tracked":       days_trk,
+                    "threshold":          SUSTAINED_FLOW_THRESHOLD,
+                },
+            })
+
+    # ── M4: OPENING_POSITION ─────────────────────────────────
+    # OI next-day confirmation: new position vs. closing existing one
+    all_sm    = sm_calls + sm_puts
+    opening_sm = [c for c in all_sm if c["position_type"] == "OPENING"]
+    if opening_sm and has_sm:
+        op_call_p = sum(c["premium"] for c in opening_sm if c["type"] == "CALL")
+        op_put_p  = sum(c["premium"] for c in opening_sm if c["type"] == "PUT")
+        if op_call_p > 0 or op_put_p > 0:
+            op_dir = "BULLISH" if op_call_p >= op_put_p else "BEARISH"
+            signals.append({
+                "name":      "OPENING_POSITION",
+                "direction": op_dir,
+                "data": {
+                    "contracts":           sorted(opening_sm, key=lambda x: x["premium"], reverse=True)[:3],
+                    "opening_call_premium": op_call_p,
+                    "opening_put_premium":  op_put_p,
+                },
+            })
+
+    # ── M5: HIGH_PUT_OI (unchanged) ───────────────────────────
     call_oi = opts["total_call_oi"]
     put_oi  = opts["total_put_oi"]
     if call_oi > 0 and put_oi > 0:
@@ -335,29 +513,7 @@ def run_signals(ticker: str, quote: dict, change_5d: float, opts: dict) -> dict:
                 },
             })
 
-    # M4: HEAVY_CALL_FLOW / HEAVY_PUT_FLOW
-    if uv_put_vol > 0 and uv_call_vol / uv_put_vol >= HCF_RATIO:
-        signals.append({
-            "name":      "HEAVY_CALL_FLOW",
-            "direction": "BULLISH",
-            "data": {
-                "call_vol": uv_call_vol,
-                "put_vol":  uv_put_vol,
-                "ratio":    round(uv_call_vol / uv_put_vol, 1),
-            },
-        })
-    elif uv_call_vol > 0 and uv_put_vol / uv_call_vol >= HCF_RATIO:
-        signals.append({
-            "name":      "HEAVY_PUT_FLOW",
-            "direction": "BEARISH",
-            "data": {
-                "call_vol": uv_call_vol,
-                "put_vol":  uv_put_vol,
-                "ratio":    round(uv_put_vol / uv_call_vol, 1),
-            },
-        })
-
-    # M5: DIP_BUY_SIGNAL
+    # ── M6: DIP_BUY_SIGNAL (unchanged logic) ─────────────────
     drop_52w = ((price - high_52w) / high_52w * 100) if high_52w else 0
     triggers = []
     if chg_1d    <= DIP_1D_DROP:  triggers.append(f"Intraday drop: {chg_1d:+.1f}%")
@@ -369,60 +525,55 @@ def run_signals(ticker: str, quote: dict, change_5d: float, opts: dict) -> dict:
         if drop_52w  <= DIP_52W_DROP: parts.append("52WK_DROP")
         if change_5d <= DIP_5D_DROP:  parts.append("5D_DROP")
         if chg_1d    <= DIP_1D_DROP:  parts.append("INTRADAY")
-
         signals.append({
             "name":      "DIP_BUY_SIGNAL:" + "+".join(parts),
             "direction": "BUY_SIGNAL",
             "data": {
-                "triggers":     triggers,
-                "drop_52w":     round(drop_52w, 1),
-                "drop_5d":      change_5d,
-                "drop_1d":      chg_1d,
-                "pc_ratio":     round(total_put / total_call, 2) if total_call else 0,
-                "call_vol":     total_call,
-                "put_vol":      total_put,
-                "notable_calls": uv_calls[:3],
+                "triggers":        triggers,
+                "drop_52w":        round(drop_52w, 1),
+                "drop_5d":         change_5d,
+                "drop_1d":         chg_1d,
+                "sm_call_premium": sm_call_premium,
+                "notable_calls":   sm_calls[:3],
             },
         })
 
-    # ── Composite star rating ──────────────────────────────────
-    uv_bearish = any(
-        s["name"] == "UNUSUAL_VOLUME" and s["direction"] == "BEARISH"
-        for s in signals
-    )
-
+    # ── Premium-weighted star rating ───────────────────────────
+    # Stars driven by dollar size, not signal count
     stars = 0
-    if not uv_bearish:
-        for s in signals:
-            name      = s["name"]
-            direction = s["direction"]
-            if name == "UNUSUAL_VOLUME":
-                if direction == "BULLISH":
-                    stars += 2
-            elif name == "LOW_PUT_CALL_RATIO":
-                stars += 1
-            elif name == "HEAVY_CALL_FLOW":
-                stars += 1
-            elif "DIP_BUY" in name:
-                stars += 1
-                if len(s["data"]["triggers"]) >= 3:
-                    stars += 1   # all 3 conditions → bonus star
 
-    stars = min(stars, 5)
+    if sm_direction == "BULLISH":
+        if   sm_call_premium >= 1_000_000: stars += 3
+        elif sm_call_premium >=   500_000: stars += 2
+        elif sm_call_premium >=   100_000: stars += 1
+    elif sm_direction == "MIXED":
+        stars += 1
+
+    if any(s["name"] == "PREMIUM_BIAS"       and s["direction"] == "BULLISH" for s in signals):
+        stars += 1
+    if any(s["name"] == "SUSTAINED_CALL_FLOW"                                 for s in signals):
+        stars += 1
+    if any(s["name"] == "OPENING_POSITION"   and s["direction"] == "BULLISH" for s in signals):
+        stars += 1
+
+    dip = next((s for s in signals if "DIP_BUY" in s["name"]), None)
+    if dip:
+        stars += 1
+        if len(dip["data"]["triggers"]) >= 3:
+            stars += 1
+
+    stars = min(5, stars)
 
     # ── Overall direction ──────────────────────────────────────
-    uv_signal   = next((s for s in signals if s["name"] == "UNUSUAL_VOLUME"), None)
-    uv_bearish  = bool(uv_signal and uv_signal["direction"] == "BEARISH")
-    hpi_trigger = any(s["name"] == "HIGH_PUT_OI" for s in signals)
+    hpi_trigger  = any(s["name"] == "HIGH_PUT_OI" for s in signals)
+    sm_bearish   = sm_direction == "BEARISH"
 
-    if uv_bearish and hpi_trigger:
-        overall = "BEARISH"
-    elif stars > 0:
-        overall = "BUY"
-    elif uv_bearish or hpi_trigger:
-        overall = "WARNING"
-    else:
-        overall = None
+    if   sm_bearish and hpi_trigger: overall = "BEARISH"
+    elif sm_bearish:                 overall = "WARNING"
+    elif stars >= 3:                 overall = "BUY"
+    elif stars >= 1:                 overall = "WATCH"
+    elif hpi_trigger:                overall = "WARNING"
+    else:                            overall = None
 
     return {
         "signals":  signals,
@@ -439,40 +590,62 @@ def run_signals(ticker: str, quote: dict, change_5d: float, opts: dict) -> dict:
 
 def run_options_scan() -> dict:
     """
-    Scans all tickers in UNIVERSE for unusual options activity.
-    Only tickers where UNUSUAL_VOLUME triggers are included in results.
-    Returns JSON-serializable dict compatible with OptionsScreenerResult.
+    Scans all tickers in UNIVERSE for smart money options activity.
+    Entry condition: SMART_MONEY_SWEEP or DIP_BUY_SIGNAL must trigger.
+    Reads/writes OI snapshot + flow history from Redis for P2 signals.
     """
     import zoneinfo
-    now_pst   = datetime.datetime.now(zoneinfo.ZoneInfo("America/Los_Angeles"))
-    date_str  = now_pst.strftime("%Y-%m-%d")
-    time_str  = now_pst.strftime("%H:%M")
+    now_pst  = datetime.datetime.now(zoneinfo.ZoneInfo("America/Los_Angeles"))
+    date_str = now_pst.strftime("%Y-%m-%d")
+    time_str = now_pst.strftime("%H:%M")
+    tz_abbr  = "PDT" if now_pst.dst() else "PST"
 
-    results = []
+    # ── Load Redis history ────────────────────────────────────
+    prev_oi_snap_full = get_options_oi_snapshot()   # { ticker → { snap_key → oi } }
+    flow_history      = get_options_flow_history()   # { ticker → [{ date, net_call_premium }] }
+
+    results:          list = []
+    new_oi_snap_full: dict = {}
 
     for ticker, info in UNIVERSE.items():
         try:
             quote = get_quote(ticker)
             if not quote["price"]:
                 continue
+            price = quote["price"]
 
-            change_5d = get_history_5d(ticker)
-            opts      = analyze_options(ticker)
+            change_5d    = get_history_5d(ticker)
+            prev_oi_snap = prev_oi_snap_full.get(ticker, {})
+            opts         = analyze_options(ticker, price, prev_oi_snap)
             if not opts:
                 continue
 
-            result = run_signals(ticker, quote, change_5d, opts)
+            # Collect new OI snapshot for this ticker
+            new_oi_snap_full[ticker] = opts.pop("new_oi_snap", {})
 
-            # Only store tickers where UNUSUAL_VOLUME triggered
-            uv_triggered = any(s["name"] == "UNUSUAL_VOLUME"
-                               for s in result["signals"])
-            if not uv_triggered:
+            # ── Update 5-day rolling flow history ─────────────
+            today_net = opts["total_call_premium"] - opts["total_put_premium"]
+            history   = flow_history.get(ticker, [])
+            history   = [h for h in history if h["date"] != date_str]
+            history.append({"date": date_str, "net_call_premium": round(today_net)})
+            history   = sorted(history, key=lambda x: x["date"])[-5:]
+            flow_history[ticker] = history
+
+            net_5d   = sum(h["net_call_premium"] for h in history)
+            flow_5d  = {"net_call_premium_5d": net_5d, "days": len(history)}
+
+            result = run_signals(ticker, quote, change_5d, opts, flow_5d)
+
+            # ── Entry gate: must have SM sweep or dip signal ──
+            has_sm  = any(s["name"] == "SMART_MONEY_SWEEP" for s in result["signals"])
+            has_dip = any("DIP_BUY" in s["name"]           for s in result["signals"])
+            if not (has_sm or has_dip):
                 continue
 
             results.append({
                 "ticker":    ticker,
                 "info":      info,
-                "price":     quote["price"],
+                "price":     price,
                 "change_1d": quote["change_1d"],
                 "change_5d": change_5d,
                 "high_52w":  quote["high_52w"],
@@ -480,26 +653,36 @@ def run_options_scan() -> dict:
                 "stars":     result["stars"],
                 "overall":   result["overall"],
                 "signals":   result["signals"],
+                "flow_5d":   {"net_premium": net_5d, "days": len(history)},
             })
 
         except Exception as e:
-            print(f"[options] {ticker}: {e}")
+            print(f"[options-v2] {ticker}: {e}")
 
-    # Sort by stars descending
-    results.sort(key=lambda x: x["stars"], reverse=True)
+    # Sort: stars desc, then sm_call_premium desc
+    def _sort_key(x):
+        sm = next((s for s in x["signals"] if s["name"] == "SMART_MONEY_SWEEP"), None)
+        return (x["stars"], sm["data"]["sm_call_premium"] if sm else 0)
+
+    results.sort(key=_sort_key, reverse=True)
+
+    # ── Persist updated Redis state ───────────────────────────
+    set_options_oi_snapshot(new_oi_snap_full)
+    set_options_flow_history(flow_history)
 
     return {
-        "date":   date_str,
-        "scan_time": time_str,
-        "stocks": results,
+        "date":      date_str,
+        "scan_time": f"{time_str} {tz_abbr}",
+        "stocks":    results,
         "params": {
-            "uv_vol_oi_ratio":   UV_VOL_OI_RATIO,
-            "uv_min_volume":     UV_MIN_VOLUME,
-            "pc_bull_threshold": PC_BULL_THRESHOLD,
-            "hpi_ratio":         HPI_RATIO,
-            "hcf_ratio":         HCF_RATIO,
-            "dip_52w_drop":      DIP_52W_DROP,
-            "dip_5d_drop":       DIP_5D_DROP,
-            "dip_1d_drop":       DIP_1D_DROP,
+            "uv_vol_oi_ratio":          UV_VOL_OI_RATIO,
+            "uv_min_volume":            UV_MIN_VOLUME,
+            "uv_min_premium":           UV_MIN_PREMIUM,
+            "smart_money_min_premium":  SMART_MONEY_MIN_PREMIUM,
+            "sustained_flow_threshold": SUSTAINED_FLOW_THRESHOLD,
+            "hpi_ratio":                HPI_RATIO,
+            "dip_52w_drop":             DIP_52W_DROP,
+            "dip_5d_drop":              DIP_5D_DROP,
+            "dip_1d_drop":              DIP_1D_DROP,
         },
     }
