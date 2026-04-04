@@ -24,13 +24,21 @@ const SIGNAL_ROWS = [
 ];
 
 const STAR_ROWS = [
-  { rule: "机构权利金 ≥$1M",    add: "+3★", note: "M1 主信号（多/空均适用）" },
-  { rule: "机构权利金 ≥$500K",  add: "+2★", note: "" },
-  { rule: "机构权利金 ≥$100K",  add: "+1★", note: "" },
-  { rule: "方向一致 PREMIUM BIAS",    add: "+1★", note: "M2，需与 M1 同向" },
-  { rule: "方向一致 SUSTAINED FLOW",  add: "+1★", note: "M3，需与 M1 同向" },
-  { rule: "方向一致 OPENING POSITION",add: "+1★", note: "M4，需与 M1 同向" },
-  { rule: "DIP BUY 触发",       add: "+1★", note: "需 M1 BULLISH；3条件全中 →+2★" },
+  { rule: "机构权利金 ≥$1M",          add: "+3★", note: "M1 BULLISH 或 BEARISH" },
+  { rule: "机构权利金 ≥$500K",        add: "+2★", note: "" },
+  { rule: "机构权利金 ≥$100K",        add: "+1★", note: "" },
+  { rule: "M1 MIXED（多空对冲）",      add: "0★",  note: "方向不明确，不计星" },
+  { rule: "方向一致 PREMIUM BIAS",     add: "+1★", note: "M2，需 M1 明确方向且同向" },
+  { rule: "方向一致 SUSTAINED FLOW",   add: "+1★", note: "M3，需 M1 明确方向且同向" },
+  { rule: "方向一致 OPENING POSITION", add: "+1★", note: "M4，需 M1 明确方向且同向" },
+  { rule: "DIP BUY 触发",             add: "+1★", note: "需 M1 BULLISH；3条件全中 →+2★" },
+];
+
+const DTE_ROWS = [
+  { tag: "SPEC", range: "0–7天",  color: "#ef5350", desc: "投机 / 事件驱动，时间价值极速流失，M1 不采纳" },
+  { tag: "SHOR", range: "8–30天", color: "#c9a84c", desc: "短期方向性押注，M1 采纳" },
+  { tag: "INST", range: "31–90天",color: "#00e676", desc: "机构建仓首选，M1 采纳，信号权重最高" },
+  { tag: "STRT", range: "90天+",  color: "#4f9cf9", desc: "战略布局 / LEAPS，M1 不采纳（DTE 超出机构窗口）" },
 ];
 
 const OVERALL_ROWS = [
@@ -53,7 +61,7 @@ function LegendPanel() {
         <div className="flex items-center gap-2">
           <span className="text-[10px] text-[#4f9cf9]/70">ℹ</span>
           <span className="text-[10px] font-trading text-muted/70 tracking-wider">信号说明</span>
-          <span className="text-[9px] text-muted/40">6个模型 · 计星规则 · 综合评级</span>
+          <span className="text-[9px] text-muted/40">6个模型 · DTE说明 · 计星规则 · 综合评级</span>
         </div>
         <span className="text-muted/40 text-[10px]">{open ? "▲" : "▼"}</span>
       </button>
@@ -68,6 +76,20 @@ function LegendPanel() {
                 <div key={r.code} className="flex gap-2 text-[10px]">
                   <span className="font-trading shrink-0 w-5 text-muted/30">{r.code}</span>
                   <span className="font-trading shrink-0 w-40" style={{ color: r.color }}>{r.name}</span>
+                  <span className="text-muted/50 leading-relaxed">{r.desc}</span>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          {/* DTE buckets */}
+          <div>
+            <p className="text-[9px] text-muted/40 tracking-wider mb-2">到期日分组 (DTE)</p>
+            <div className="space-y-1.5">
+              {DTE_ROWS.map((r) => (
+                <div key={r.tag} className="flex gap-2 text-[10px]">
+                  <span className="font-trading shrink-0 w-10 text-right" style={{ color: r.color }}>{r.tag}</span>
+                  <span className="font-trading shrink-0 w-14 text-muted/40">{r.range}</span>
                   <span className="text-muted/50 leading-relaxed">{r.desc}</span>
                 </div>
               ))}
