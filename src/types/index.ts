@@ -394,11 +394,21 @@ export interface OptionsContract {
   type: "CALL" | "PUT";
   strike: number;
   expiry: string;
+  dte: number;
+  dte_bucket: "SPECULATIVE" | "SHORT_TERM" | "INSTITUTIONAL" | "STRATEGIC";
   volume: number;
   oi: number;
   ratio: number;
-  iv: number;
+  bid: number;
+  ask: number;
   last: number;
+  mid: number;
+  above_mid: boolean;
+  premium: number;
+  iv: number;
+  otm: boolean;
+  smart_money: boolean;
+  position_type: "OPENING" | "CLOSING" | "UNCHANGED" | "UNKNOWN";
 }
 
 export interface OptionsSignal {
@@ -425,8 +435,9 @@ export interface OptionsStock {
   high_52w: number;
   drop_52w: number;
   stars: number;
-  overall: "BUY" | "BEARISH" | "WARNING" | null;
+  overall: "BUY" | "BEARISH" | "WARNING" | "WATCH" | null;
   signals: OptionsSignal[];
+  flow_5d?: { net_premium: number; days: number };
 }
 
 export interface OptionsScreenerResult {

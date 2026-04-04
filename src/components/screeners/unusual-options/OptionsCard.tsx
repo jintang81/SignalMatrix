@@ -9,9 +9,10 @@ const STARS_COLORS: Record<number, string> = {
 };
 
 const OVERALL_CONFIG: Record<string, { label: string; color: string; bg: string }> = {
-  BUY:     { label: "BUY",     color: "#00e676", bg: "rgba(0,230,118,0.08)" },
-  BEARISH: { label: "BEARISH", color: "#ff1744", bg: "rgba(255,23,68,0.08)" },
+  BUY:     { label: "BUY",       color: "#00e676", bg: "rgba(0,230,118,0.08)" },
+  BEARISH: { label: "BEARISH",   color: "#ff1744", bg: "rgba(255,23,68,0.08)" },
   WARNING: { label: "⚠ WARNING", color: "#c9a84c", bg: "rgba(201,168,76,0.08)" },
+  WATCH:   { label: "WATCH",     color: "#4f9cf9", bg: "rgba(79,156,249,0.08)" },
 };
 
 function StarRating({ stars }: { stars: number }) {

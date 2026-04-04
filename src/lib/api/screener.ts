@@ -611,8 +611,8 @@ export async function triggerOptionsScan(): Promise<void> {
 // ─── Options Mock Data ────────────────────────────────────────────
 
 export const MOCK_OPTIONS_DATA: OptionsScreenerResult = {
-  date: "2026-03-29",
-  scan_time: "07:00",
+  date: "2026-04-03",
+  scan_time: "07:00 PDT",
   stocks: [
     {
       ticker: "NVDA",
@@ -620,25 +620,25 @@ export const MOCK_OPTIONS_DATA: OptionsScreenerResult = {
       price: 865.30, change_1d: -3.2, change_5d: -9.5,
       high_52w: 974.00, drop_52w: -11.2,
       stars: 4, overall: "BUY",
+      flow_5d: { net_premium: 1250000, days: 3 },
       signals: [
         {
-          name: "UNUSUAL_VOLUME", direction: "BULLISH",
+          name: "SMART_MONEY_SWEEP", direction: "BULLISH",
           data: {
             contracts: [
-              { type: "CALL", strike: 900, expiry: "2026-04-17", volume: 8420, oi: 1850, ratio: 4.6, iv: 52.3, last: 12.50 },
-              { type: "CALL", strike: 880, expiry: "2026-04-17", volume: 6100, oi: 980,  ratio: 6.2, iv: 48.1, last: 18.90 },
-              { type: "PUT",  strike: 820, expiry: "2026-04-17", volume: 3200, oi: 740,  ratio: 4.3, iv: 55.6, last: 9.30  },
-            ],
-            uv_call_vol: 14520, uv_put_vol: 3200,
+              { type: "CALL", strike: 900, expiry: "2026-04-17", dte: 14, dte_bucket: "SHORT_TERM",    volume: 8420, oi: 1850, ratio: 4.6, bid: 11.20, ask: 13.80, last: 12.50, mid: 12.50, above_mid: true,  premium: 1050000, iv: 52.3, otm: true,  smart_money: true, position_type: "OPENING" },
+              ],
+            sm_call_premium: 1050000, sm_put_premium: 0, opening_count: 1,
+            uv_call_vol: 14520, uv_put_vol: 0,
           },
         },
         {
-          name: "LOW_PUT_CALL_RATIO", direction: "BULLISH",
-          data: { pc_ratio: 0.38, threshold: 0.5, call_vol: 42800, put_vol: 16300 },
+          name: "PREMIUM_BIAS", direction: "BULLISH",
+          data: { call_premium: 4200000, put_premium: 1800000, ratio: 2.33 },
         },
         {
-          name: "HEAVY_CALL_FLOW", direction: "BULLISH",
-          data: { call_vol: 14520, put_vol: 3200, ratio: 4.5 },
+          name: "SUSTAINED_CALL_FLOW", direction: "BULLISH",
+          data: { net_call_premium_5d: 1250000, days_tracked: 3, threshold: 300000 },
         },
       ],
     },
@@ -647,21 +647,22 @@ export const MOCK_OPTIONS_DATA: OptionsScreenerResult = {
       info: { name: "标普500", sector: "大盘指数", "2x": "SSO", "3x": "UPRO", inv2x: "SDS", inv3x: "SPXU" },
       price: 512.40, change_1d: -1.8, change_5d: -5.2,
       high_52w: 578.00, drop_52w: -11.3,
-      stars: 2, overall: "BUY",
+      stars: 2, overall: "WATCH",
+      flow_5d: { net_premium: 380000, days: 2 },
       signals: [
         {
-          name: "UNUSUAL_VOLUME", direction: "BULLISH",
+          name: "SMART_MONEY_SWEEP", direction: "BULLISH",
           data: {
             contracts: [
-              { type: "CALL", strike: 530, expiry: "2026-04-03", volume: 52000, oi: 14500, ratio: 3.6, iv: 22.1, last: 3.80 },
-              { type: "CALL", strike: 520, expiry: "2026-04-03", volume: 38500, oi: 9800,  ratio: 3.9, iv: 20.4, last: 6.50 },
+              { type: "CALL", strike: 530, expiry: "2026-04-17", dte: 14, dte_bucket: "SHORT_TERM",    volume: 52000, oi: 14500, ratio: 3.6, bid: 3.40, ask: 4.20, last: 3.90, mid: 3.80, above_mid: true,  premium: 202800, iv: 22.1, otm: true, smart_money: true, position_type: "UNKNOWN" },
             ],
+            sm_call_premium: 202800, sm_put_premium: 0, opening_count: 0,
             uv_call_vol: 90500, uv_put_vol: 0,
           },
         },
         {
-          name: "LOW_PUT_CALL_RATIO", direction: "BULLISH",
-          data: { pc_ratio: 0.44, threshold: 0.5, call_vol: 285000, put_vol: 126000 },
+          name: "PREMIUM_BIAS", direction: "BULLISH",
+          data: { call_premium: 3850000, put_premium: 1620000, ratio: 2.38 },
         },
       ],
     },
@@ -671,14 +672,15 @@ export const MOCK_OPTIONS_DATA: OptionsScreenerResult = {
       price: 172.80, change_1d: -6.4, change_5d: -18.2,
       high_52w: 358.64, drop_52w: -51.8,
       stars: 2, overall: "WARNING",
+      flow_5d: { net_premium: -450000, days: 2 },
       signals: [
         {
-          name: "UNUSUAL_VOLUME", direction: "BEARISH",
+          name: "SMART_MONEY_SWEEP", direction: "BEARISH",
           data: {
             contracts: [
-              { type: "PUT", strike: 160, expiry: "2026-04-17", volume: 18500, oi: 4200, ratio: 4.4, iv: 78.5, last: 8.40 },
-              { type: "PUT", strike: 150, expiry: "2026-04-17", volume: 12300, oi: 3100, ratio: 4.0, iv: 82.1, last: 5.60 },
+              { type: "PUT", strike: 160, expiry: "2026-04-17", dte: 14, dte_bucket: "SHORT_TERM", volume: 18500, oi: 4200, ratio: 4.4, bid: 7.80, ask: 9.00, last: 8.60, mid: 8.40, above_mid: true,  premium: 1591000, iv: 78.5, otm: true, smart_money: true, position_type: "OPENING" },
             ],
+            sm_call_premium: 0, sm_put_premium: 1591000, opening_count: 1,
             uv_call_vol: 0, uv_put_vol: 30800,
           },
         },
@@ -691,10 +693,8 @@ export const MOCK_OPTIONS_DATA: OptionsScreenerResult = {
           data: {
             triggers: ["Intraday drop: -6.4%", "5-day drop: -18.2%", "From 52-week high: -51.8%"],
             drop_52w: -51.8, drop_5d: -18.2, drop_1d: -6.4,
-            pc_ratio: 1.82, call_vol: 98000, put_vol: 178000,
-            notable_calls: [
-              { type: "CALL", strike: 180, expiry: "2026-04-17", volume: 6200, oi: 1450, ratio: 4.3, iv: 75.2, last: 5.10 },
-            ],
+            sm_call_premium: 0,
+            notable_calls: [],
           },
         },
       ],
@@ -703,9 +703,10 @@ export const MOCK_OPTIONS_DATA: OptionsScreenerResult = {
   params: {
     uv_vol_oi_ratio: 3.0,
     uv_min_volume: 500,
-    pc_bull_threshold: 0.5,
+    uv_min_premium: 20000,
+    smart_money_min_premium: 100000,
+    sustained_flow_threshold: 300000,
     hpi_ratio: 1.5,
-    hcf_ratio: 3.0,
     dip_52w_drop: -30.0,
     dip_5d_drop: -10.0,
     dip_1d_drop: -5.0,

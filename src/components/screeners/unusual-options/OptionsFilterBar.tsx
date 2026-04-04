@@ -2,10 +2,10 @@
 
 export type OptionsFilter = {
   minStars: number;
-  direction: "ALL" | "BUY" | "BEARISH" | "WARNING";
+  direction: "ALL" | "BUY" | "BEARISH" | "WARNING" | "WATCH";
 };
 
-const DIRECTIONS: OptionsFilter["direction"][] = ["ALL", "BUY", "BEARISH", "WARNING"];
+const DIRECTIONS: OptionsFilter["direction"][] = ["ALL", "BUY", "BEARISH", "WARNING", "WATCH"];
 const STAR_OPTIONS = [0, 1, 2, 3, 4, 5];
 
 const DIR_STYLES: Record<string, string> = {
@@ -13,6 +13,7 @@ const DIR_STYLES: Record<string, string> = {
   BUY:     "text-bull border-bull/40 hover:border-bull/70",
   BEARISH: "text-bear border-bear/40 hover:border-bear/70",
   WARNING: "text-gold border-gold/40 hover:border-gold/70",
+  WATCH:   "text-[#4f9cf9] border-[#4f9cf9]/40 hover:border-[#4f9cf9]/70",
 };
 
 const DIR_ACTIVE: Record<string, string> = {
@@ -20,6 +21,7 @@ const DIR_ACTIVE: Record<string, string> = {
   BUY:     "bg-bull/10 border-bull/60 text-bull",
   BEARISH: "bg-bear/10 border-bear/60 text-bear",
   WARNING: "bg-gold/10 border-gold/60 text-gold",
+  WATCH:   "bg-[#4f9cf9]/10 border-[#4f9cf9]/60 text-[#4f9cf9]",
 };
 
 export function OptionsFilterBar({

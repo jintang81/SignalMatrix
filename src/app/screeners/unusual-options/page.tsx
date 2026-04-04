@@ -160,10 +160,11 @@ export default function UnusualOptionsPage() {
 
           {/* Params footer */}
           <div className="panel px-4 py-2.5 flex flex-wrap gap-4 text-[10px] text-muted/30 font-trading">
-            <span>UV 阈值: Vol ≥ {data.params.uv_vol_oi_ratio}× OI</span>
-            <span>最低成交量: {data.params.uv_min_volume}</span>
-            <span>P/C 牛市线: &lt;{data.params.pc_bull_threshold}</span>
-            <span>Put OI 警示线: &gt;{data.params.hpi_ratio}×</span>
+            <span>Vol/OI ≥ {data.params.uv_vol_oi_ratio}×</span>
+            <span>入池权利金 ≥ ${(data.params.uv_min_premium / 1000).toFixed(0)}K</span>
+            <span>机构级 ≥ ${(data.params.smart_money_min_premium / 1000).toFixed(0)}K</span>
+            <span>5日流量阈值 ${(data.params.sustained_flow_threshold / 1000).toFixed(0)}K</span>
+            <span>Put OI 警示线 &gt;{data.params.hpi_ratio}×</span>
           </div>
         </>
       )}
