@@ -581,7 +581,7 @@ def run_signals(ticker: str, quote: dict, change_5d: float,
     if   sm_bearish and (sm_put_premium >= 500_000 or hpi_trigger): overall = "BEARISH"
     elif sm_bearish:                                                  overall = "WARNING"
     elif sm_bullish and stars >= 3:                                   overall = "BUY"
-    elif hpi_trigger:                                                 overall = "WARNING"
+    elif hpi_trigger and not sm_bullish:                              overall = "WARNING"
     elif stars >= 1:                                                  overall = "WATCH"
     else:                                                             overall = None
 
