@@ -15,7 +15,7 @@ function getStarColor(stars: number, overall: string | null): string {
   if (overall === "BEARISH" || overall === "WARNING") {
     return stars >= 3 ? "#ff1744" : stars >= 1 ? "#ef5350" : "#94a3b8";
   }
-  return stars >= 4 ? "#00e676" : stars >= 2 ? "#c9a84c" : "#94a3b8";
+  return stars >= 4 ? "#00e676" : stars >= 1 ? "#c9a84c" : "#94a3b8";
 }
 
 function StarRating({ stars, overall }: { stars: number; overall: string | null }) {
