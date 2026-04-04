@@ -563,11 +563,13 @@ def run_signals(ticker: str, quote: dict, change_5d: float,
     if any(s["name"] == "OPENING_POSITION" and s["direction"] == pb_dir for s in signals):
         stars += 1
 
-    dip = next((s for s in signals if "DIP_BUY" in s["name"]), None)
-    if dip:
-        stars += 1
-        if len(dip["data"]["triggers"]) >= 3:
+    # M6 only adds stars when M1 is BULLISH (confirms smart money buying the dip)
+    if sm_direction == "BULLISH":
+        dip = next((s for s in signals if "DIP_BUY" in s["name"]), None)
+        if dip:
             stars += 1
+            if len(dip["data"]["triggers"]) >= 3:
+                stars += 1
 
     stars = min(5, stars)
 
@@ -655,10 +657,9 @@ def run_options_scan() -> dict:
 
             result = run_signals(ticker, quote, change_5d, opts, flow_5d)
 
-            # ── Entry gate: must have SM sweep or dip signal ──
-            has_sm  = any(s["name"] == "SMART_MONEY_SWEEP" for s in result["signals"])
-            has_dip = any("DIP_BUY" in s["name"]           for s in result["signals"])
-            if not (has_sm or has_dip):
+            # ── Entry gate: must have SM sweep ────────────────
+            has_sm = any(s["name"] == "SMART_MONEY_SWEEP" for s in result["signals"])
+            if not has_sm:
                 continue
 
             results.append({
