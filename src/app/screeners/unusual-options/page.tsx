@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useState, useCallback, useRef } from "react";
 import type { OptionsScreenerResult } from "@/types";
 import type { ScanStatus } from "@/lib/api/screener";
 import {
@@ -11,6 +11,101 @@ import {
 import { OptionsCard } from "@/components/screeners/unusual-options/OptionsCard";
 import { OptionsFilterBar, type OptionsFilter } from "@/components/screeners/unusual-options/OptionsFilterBar";
 import { OptionsSummaryStats } from "@/components/screeners/unusual-options/OptionsSummaryStats";
+
+// ─── Legend panel ─────────────────────────────────────────────────
+
+const SIGNAL_ROWS = [
+  { code: "M1", name: "SMART MONEY SWEEP",  color: "#00e676", desc: "买方主动扫单 (above-mid) + OTM + 权利金≥$100K + DTE 8-90天 — 机构级方向性押注，核心信号" },
+  { code: "M2", name: "PREMIUM BIAS",       color: "#c9a84c", desc: "全市场 Call vs Put 总权利金比率 ≥2× — 资金系统性偏向某一方向" },
+  { code: "M3", name: "SUSTAINED FLOW",     color: "#c9a84c", desc: "5日累计净权利金绝对值 >$300K — 连续多日持续建仓，非单日脉冲" },
+  { code: "M4", name: "OPENING POSITION",   color: "#4f9cf9", desc: "次日 OI 增加 → 确认新开仓而非平仓，降低假信号率" },
+  { code: "M5", name: "HIGH PUT OI",        color: "#ff1744", desc: "Put/Call OI >1.5× — 市场隐含大规模下行对冲压力，风险警示" },
+  { code: "M6", name: "DIP BUY SIGNAL",     color: "#26a69a", desc: "多重跌幅触发（当日/5日/52周高点）中出现异常看涨押注，逆势信号" },
+];
+
+const STAR_ROWS = [
+  { rule: "机构权利金 ≥$1M",    add: "+3★", note: "M1 主信号（多/空均适用）" },
+  { rule: "机构权利金 ≥$500K",  add: "+2★", note: "" },
+  { rule: "机构权利金 ≥$100K",  add: "+1★", note: "" },
+  { rule: "方向一致 PREMIUM BIAS",    add: "+1★", note: "M2，需与 M1 同向" },
+  { rule: "方向一致 SUSTAINED FLOW",  add: "+1★", note: "M3，需与 M1 同向" },
+  { rule: "方向一致 OPENING POSITION",add: "+1★", note: "M4，需与 M1 同向" },
+  { rule: "DIP BUY 触发",       add: "+1★", note: "3条件全中 →+2★" },
+];
+
+const OVERALL_ROWS = [
+  { label: "BUY",     color: "#00e676", rule: "多头 SM ≥$100K + 总星级≥3★" },
+  { label: "BEARISH", color: "#ff1744", rule: "空头 SM ≥$500K，或空头 SM + HIGH PUT OI" },
+  { label: "WARNING", color: "#c9a84c", rule: "空头 SM 存在但权利金 <$500K" },
+  { label: "WATCH",   color: "#4f9cf9", rule: "总星级1-2★，值得关注" },
+];
+
+function LegendPanel() {
+  const [open, setOpen] = useState(false);
+  const ref = useRef<HTMLDivElement>(null);
+
+  return (
+    <div className="panel overflow-hidden">
+      <button
+        onClick={() => setOpen(v => !v)}
+        className="w-full px-4 py-2.5 flex items-center justify-between text-left hover:bg-white/[0.02] transition-colors"
+      >
+        <div className="flex items-center gap-2">
+          <span className="text-[10px] font-trading text-muted/50 tracking-wider">信号说明</span>
+          <span className="text-[9px] text-muted/30">6个模型 · 计星规则 · 综合评级</span>
+        </div>
+        <span className="text-muted/30 text-[10px]">{open ? "▲" : "▼"}</span>
+      </button>
+
+      {open && (
+        <div ref={ref} className="border-t border-border/40 px-4 py-3 space-y-4">
+          {/* Signal models */}
+          <div>
+            <p className="text-[9px] text-muted/40 tracking-wider mb-2">信号模型</p>
+            <div className="space-y-1.5">
+              {SIGNAL_ROWS.map((r) => (
+                <div key={r.code} className="flex gap-2 text-[10px]">
+                  <span className="font-trading shrink-0 w-5 text-muted/30">{r.code}</span>
+                  <span className="font-trading shrink-0 w-40" style={{ color: r.color }}>{r.name}</span>
+                  <span className="text-muted/50 leading-relaxed">{r.desc}</span>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            {/* Star rules */}
+            <div>
+              <p className="text-[9px] text-muted/40 tracking-wider mb-2">计星规则（最高5★）</p>
+              <div className="space-y-1">
+                {STAR_ROWS.map((r, i) => (
+                  <div key={i} className="flex items-baseline gap-2 text-[10px]">
+                    <span className="text-gold font-trading shrink-0 w-8">{r.add}</span>
+                    <span className="text-muted/60">{r.rule}</span>
+                    {r.note && <span className="text-muted/30 text-[9px]">{r.note}</span>}
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            {/* Overall labels */}
+            <div>
+              <p className="text-[9px] text-muted/40 tracking-wider mb-2">综合评级</p>
+              <div className="space-y-1">
+                {OVERALL_ROWS.map((r) => (
+                  <div key={r.label} className="flex items-baseline gap-2 text-[10px]">
+                    <span className="font-trading font-bold shrink-0 w-16" style={{ color: r.color }}>{r.label}</span>
+                    <span className="text-muted/50">{r.rule}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
 
 // ─── Polling helper ───────────────────────────────────────────────
 
@@ -100,7 +195,7 @@ export default function UnusualOptionsPage() {
           </div>
           <p className="text-base font-trading text-txt">异常期权信号</p>
           <p className="text-[11px] text-muted/50 mt-1 leading-relaxed">
-            扫描 Vol ≥ 3× OI 的异常期权合约，综合 5 个信号模型评分，识别机构方向性押注
+            扫描 Vol ≥ 3× OI 的异常期权合约，按美元权利金加权评分，6个模型识别机构方向性押注
           </p>
         </div>
         <div className="flex flex-col items-end gap-2 shrink-0">
@@ -119,6 +214,9 @@ export default function UnusualOptionsPage() {
           </div>
         </div>
       </div>
+
+      {/* ── Legend ── */}
+      <LegendPanel />
 
       {/* ── Loading ── */}
       {loading && (

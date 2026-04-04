@@ -538,22 +538,29 @@ def run_signals(ticker: str, quote: dict, change_5d: float,
             },
         })
 
-    # ── Premium-weighted star rating ───────────────────────────
-    # Stars driven by dollar size, not signal count
+    # ── Premium-weighted star rating (direction-agnostic) ──────
+    # Stars driven by dominant SM premium size, not signal count
     stars = 0
 
     if sm_direction == "BULLISH":
         if   sm_call_premium >= 1_000_000: stars += 3
         elif sm_call_premium >=   500_000: stars += 2
         elif sm_call_premium >=   100_000: stars += 1
+    elif sm_direction == "BEARISH":
+        if   sm_put_premium  >= 1_000_000: stars += 3
+        elif sm_put_premium  >=   500_000: stars += 2
+        elif sm_put_premium  >=   100_000: stars += 1
     elif sm_direction == "MIXED":
         stars += 1
 
-    if any(s["name"] == "PREMIUM_BIAS"       and s["direction"] == "BULLISH" for s in signals):
+    # Confirmation signals add stars only when aligned with SM direction
+    pb_dir  = "BULLISH" if sm_direction == "BULLISH" else "BEARISH"
+    sf_name = "SUSTAINED_CALL_FLOW" if sm_direction == "BULLISH" else "SUSTAINED_PUT_FLOW"
+    if any(s["name"] == "PREMIUM_BIAS"     and s["direction"] == pb_dir for s in signals):
         stars += 1
-    if any(s["name"] == "SUSTAINED_CALL_FLOW"                                 for s in signals):
+    if any(s["name"] == sf_name                                         for s in signals):
         stars += 1
-    if any(s["name"] == "OPENING_POSITION"   and s["direction"] == "BULLISH" for s in signals):
+    if any(s["name"] == "OPENING_POSITION" and s["direction"] == pb_dir for s in signals):
         stars += 1
 
     dip = next((s for s in signals if "DIP_BUY" in s["name"]), None)
@@ -565,15 +572,16 @@ def run_signals(ticker: str, quote: dict, change_5d: float,
     stars = min(5, stars)
 
     # ── Overall direction ──────────────────────────────────────
-    hpi_trigger  = any(s["name"] == "HIGH_PUT_OI" for s in signals)
-    sm_bearish   = sm_direction == "BEARISH"
+    hpi_trigger = any(s["name"] == "HIGH_PUT_OI" for s in signals)
+    sm_bearish  = sm_direction == "BEARISH"
+    sm_bullish  = sm_direction == "BULLISH"
 
-    if   sm_bearish and hpi_trigger: overall = "BEARISH"
-    elif sm_bearish:                 overall = "WARNING"
-    elif stars >= 3:                 overall = "BUY"
-    elif stars >= 1:                 overall = "WATCH"
-    elif hpi_trigger:                overall = "WARNING"
-    else:                            overall = None
+    if   sm_bearish and (sm_put_premium >= 500_000 or hpi_trigger): overall = "BEARISH"
+    elif sm_bearish:                                                  overall = "WARNING"
+    elif sm_bullish and stars >= 3:                                   overall = "BUY"
+    elif stars >= 1:                                                  overall = "WATCH"
+    elif hpi_trigger:                                                 overall = "WARNING"
+    else:                                                             overall = None
 
     return {
         "signals":  signals,
@@ -623,11 +631,22 @@ def run_options_scan() -> dict:
             # Collect new OI snapshot for this ticker
             new_oi_snap_full[ticker] = opts.pop("new_oi_snap", {})
 
+            # ── OI delta vs previous scan ──────────────────────
+            prev_call_oi  = sum(v for k, v in prev_oi_snap.items() if k.endswith("|call"))
+            prev_put_oi   = sum(v for k, v in prev_oi_snap.items() if k.endswith("|put"))
+            call_oi_delta = opts["total_call_oi"] - prev_call_oi if prev_oi_snap else 0
+            put_oi_delta  = opts["total_put_oi"]  - prev_put_oi  if prev_oi_snap else 0
+
             # ── Update 5-day rolling flow history ─────────────
             today_net = opts["total_call_premium"] - opts["total_put_premium"]
             history   = flow_history.get(ticker, [])
             history   = [h for h in history if h["date"] != date_str]
-            history.append({"date": date_str, "net_call_premium": round(today_net)})
+            history.append({
+                "date":             date_str,
+                "net_call_premium": round(today_net),
+                "call_oi_delta":    call_oi_delta,
+                "put_oi_delta":     put_oi_delta,
+            })
             history   = sorted(history, key=lambda x: x["date"])[-5:]
             flow_history[ticker] = history
 
