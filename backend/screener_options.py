@@ -550,8 +550,7 @@ def run_signals(ticker: str, quote: dict, change_5d: float,
         if   sm_put_premium  >= 1_000_000: stars += 3
         elif sm_put_premium  >=   500_000: stars += 2
         elif sm_put_premium  >=   100_000: stars += 1
-    elif sm_direction == "MIXED":
-        stars += 1
+    # MIXED: no stars — directional conviction is unclear
 
     # Confirmation signals only add stars when SM has a clear direction (not MIXED)
     if sm_direction in ("BULLISH", "BEARISH"):
