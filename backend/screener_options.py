@@ -553,15 +553,16 @@ def run_signals(ticker: str, quote: dict, change_5d: float,
     elif sm_direction == "MIXED":
         stars += 1
 
-    # Confirmation signals add stars only when aligned with SM direction
-    pb_dir  = "BULLISH" if sm_direction == "BULLISH" else "BEARISH"
-    sf_name = "SUSTAINED_CALL_FLOW" if sm_direction == "BULLISH" else "SUSTAINED_PUT_FLOW"
-    if any(s["name"] == "PREMIUM_BIAS"     and s["direction"] == pb_dir for s in signals):
-        stars += 1
-    if any(s["name"] == sf_name                                         for s in signals):
-        stars += 1
-    if any(s["name"] == "OPENING_POSITION" and s["direction"] == pb_dir for s in signals):
-        stars += 1
+    # Confirmation signals only add stars when SM has a clear direction (not MIXED)
+    if sm_direction in ("BULLISH", "BEARISH"):
+        pb_dir  = sm_direction
+        sf_name = "SUSTAINED_CALL_FLOW" if sm_direction == "BULLISH" else "SUSTAINED_PUT_FLOW"
+        if any(s["name"] == "PREMIUM_BIAS"     and s["direction"] == pb_dir for s in signals):
+            stars += 1
+        if any(s["name"] == sf_name                                         for s in signals):
+            stars += 1
+        if any(s["name"] == "OPENING_POSITION" and s["direction"] == pb_dir for s in signals):
+            stars += 1
 
     # M6 only adds stars when M1 is BULLISH (confirms smart money buying the dip)
     if sm_direction == "BULLISH":
