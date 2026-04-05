@@ -21,6 +21,7 @@ import threading
 
 import requests
 from urllib.parse import quote
+from redis_client import set_volume_daily_snapshot
 
 # ─── 核心参数 ────────────────────────────────────────────────────────
 LOOKBACK_DAYS     = 200     # 拉取历史天数（含 MA50 + 缓冲）
@@ -443,8 +444,23 @@ def run_volume_scan() -> dict:
     # 按放量倍数降序排列
     results.sort(key=lambda x: x["vol_ratio"], reverse=True)
 
+    date_str = now_la.strftime("%Y-%m-%d")
+
+    # ── Daily snapshot for backtesting ────────────────────────
+    snapshot_entries = [
+        {
+            "ticker":     r["ticker"],
+            "price":      r["last_close"],
+            "vol_ratio":  r["vol_ratio"],
+            "vol_ratio2": r["vol_ratio2"],
+            "ytd_return": r["ytd_return"],
+        }
+        for r in results
+    ]
+    set_volume_daily_snapshot(date_str, snapshot_entries)
+
     return {
-        "date":      now_la.strftime("%Y-%m-%d"),
+        "date":      date_str,
         "scan_time": now_la.strftime("%Y-%m-%d %H:%M:%S %Z"),
         "results":   results,
         "params": {

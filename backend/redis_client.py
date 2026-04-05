@@ -331,3 +331,69 @@ def get_options_daily_snapshot(date_str: str) -> dict | None:
     if raw is None:
         return None
     return json.loads(raw) if isinstance(raw, str) else raw
+
+
+# ─── Generic snapshot helper ──────────────────────────────────────
+
+def _set_snapshot(prefix: str, date_str: str, entries: list) -> None:
+    """Generic: store a daily snapshot and update its index."""
+    r = _get_redis()
+    key       = f"{prefix}:{date_str}"
+    index_key = f"{prefix}:index"
+    r.setex(key, SNAPSHOT_TTL, json.dumps({"date": date_str, "entries": entries}))
+    raw   = r.get(index_key)
+    dates: list = json.loads(raw) if isinstance(raw, str) and raw else []
+    if date_str not in dates:
+        dates.append(date_str)
+        dates.sort()
+    r.setex(index_key, SNAPSHOT_INDEX_TTL, json.dumps(dates))
+
+
+def _get_snapshot(prefix: str, date_str: str) -> dict | None:
+    raw = _get_redis().get(f"{prefix}:{date_str}")
+    if raw is None:
+        return None
+    return json.loads(raw) if isinstance(raw, str) else raw
+
+
+def _get_snapshot_index(prefix: str) -> list:
+    raw = _get_redis().get(f"{prefix}:index")
+    if not raw:
+        return []
+    return json.loads(raw) if isinstance(raw, str) else raw
+
+
+# ─── Divergence daily snapshots ───────────────────────────────────
+
+DIV_SNAP_PREFIX = "screener:divergence:snapshot"
+
+
+def set_divergence_daily_snapshot(date_str: str, entries: list) -> None:
+    """entries: list of { ticker, price, pct_change, vol_ratio, rsi_latest, triggered }"""
+    _set_snapshot(DIV_SNAP_PREFIX, date_str, entries)
+
+
+def get_divergence_daily_snapshot(date_str: str) -> dict | None:
+    return _get_snapshot(DIV_SNAP_PREFIX, date_str)
+
+
+def get_divergence_snapshot_index() -> list:
+    return _get_snapshot_index(DIV_SNAP_PREFIX)
+
+
+# ─── Volume surge daily snapshots ─────────────────────────────────
+
+VOL_SNAP_PREFIX = "screener:volume:snapshot"
+
+
+def set_volume_daily_snapshot(date_str: str, entries: list) -> None:
+    """entries: list of { ticker, price, vol_ratio, vol_ratio2, ytd_return }"""
+    _set_snapshot(VOL_SNAP_PREFIX, date_str, entries)
+
+
+def get_volume_daily_snapshot(date_str: str) -> dict | None:
+    return _get_snapshot(VOL_SNAP_PREFIX, date_str)
+
+
+def get_volume_snapshot_index() -> list:
+    return _get_snapshot_index(VOL_SNAP_PREFIX)

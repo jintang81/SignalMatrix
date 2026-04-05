@@ -18,6 +18,7 @@ import json
 import requests
 from datetime import datetime, timedelta
 from concurrent.futures import ThreadPoolExecutor, as_completed
+from redis_client import set_divergence_daily_snapshot
 import threading
 
 # ─────────────────────────────────────────────
@@ -576,8 +577,24 @@ def run_full_scan() -> dict:
     la_tz = ZoneInfo("America/Los_Angeles")
     now_la = datetime.now(la_tz)
     tz_abbr = "PDT" if now_la.dst() and now_la.dst().total_seconds() > 0 else "PST"
+    date_str = str(now_la.date())
+
+    # ── Daily snapshot for backtesting ────────────────────────
+    snapshot_entries = [
+        {
+            "ticker":     r["ticker"],
+            "price":      r["price"],
+            "pct_change": r["pct_change"],
+            "vol_ratio":  r["vol_ratio"],
+            "rsi_latest": r["rsi_latest"],
+            "triggered":  r["triggered"],
+        }
+        for r in results
+    ]
+    set_divergence_daily_snapshot(date_str, snapshot_entries)
+
     return {
-        "date":      str(now_la.date()),
+        "date":      date_str,
         "scan_time": now_la.strftime(f"%Y-%m-%d %H:%M:%S {tz_abbr}"),
         "stocks":    results,
     }

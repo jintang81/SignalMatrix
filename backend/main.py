@@ -37,6 +37,8 @@ from redis_client import (
     get_duck_result, get_duck_status, set_duck_result, set_duck_status,
     get_options_result, get_options_status, set_options_result, set_options_status,
     get_options_snapshot_index, get_options_daily_snapshot,
+    get_divergence_snapshot_index, get_divergence_daily_snapshot,
+    get_volume_snapshot_index, get_volume_daily_snapshot,
     get_top_div_result, get_top_div_status, set_top_div_result, set_top_div_status,
     get_top_vol_result, get_top_vol_status, set_top_vol_result, set_top_vol_status,
     get_ai_strategy_result, get_ai_strategy_status, set_ai_strategy_result, set_ai_strategy_status,
@@ -127,6 +129,21 @@ def get_scan_status():
     return get_status()
 
 
+@app.get("/api/screener/snapshots")
+def get_divergence_snapshots(date: str | None = None):
+    """
+    Backtesting endpoint for 底背离.
+    - No params: returns index of available snapshot dates.
+    - ?date=YYYY-MM-DD: returns that day's lightweight snapshot.
+    """
+    if date:
+        snap = get_divergence_daily_snapshot(date)
+        if snap is None:
+            raise HTTPException(status_code=404, detail=f"No divergence snapshot for {date}")
+        return snap
+    return {"dates": get_divergence_snapshot_index()}
+
+
 @app.post("/api/screener/run", status_code=202)
 async def trigger_scan(
     background_tasks: BackgroundTasks,
@@ -167,6 +184,21 @@ def get_volume():
 def get_volume_scan_status():
     """Returns current volume scan status: idle | running | done | error."""
     return get_volume_status()
+
+
+@app.get("/api/screener/volume/snapshots")
+def get_volume_snapshots(date: str | None = None):
+    """
+    Backtesting endpoint for 底部放量.
+    - No params: returns index of available snapshot dates.
+    - ?date=YYYY-MM-DD: returns that day's lightweight snapshot.
+    """
+    if date:
+        snap = get_volume_daily_snapshot(date)
+        if snap is None:
+            raise HTTPException(status_code=404, detail=f"No volume snapshot for {date}")
+        return snap
+    return {"dates": get_volume_snapshot_index()}
 
 
 @app.post("/api/screener/volume/run", status_code=202)
