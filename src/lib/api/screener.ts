@@ -5,6 +5,7 @@
  */
 
 import type {
+  NLSearchResult,
   DivergenceScreenerResult,
   DivergenceStock,
   DivergenceChartData,
@@ -1232,4 +1233,45 @@ function makeMockRsiTopDetail(
     bars_ago: 3,
     label: "RSI",
   };
+}
+
+// ─── NL Screener Public API ───────────────────────────────────────
+
+export async function searchNLScreener(query: string): Promise<NLSearchResult> {
+  const res = await fetch(`${BACKEND_URL}/api/screener/nl`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      "X-API-Key": SCAN_API_KEY,
+    },
+    body: JSON.stringify({ query }),
+  });
+  if (res.status === 503) {
+    const err = await res.json().catch(() => ({})) as { detail?: string };
+    throw new Error(err.detail ?? "基本面数据未缓存，请稍后再试");
+  }
+  if (!res.ok) throw new Error(`AI 筛选失败 (${res.status})`);
+  return res.json();
+}
+
+export async function triggerFundamentalsRefresh(): Promise<void> {
+  const res = await fetch(`${BACKEND_URL}/api/screener/nl/refresh-fundamentals`, {
+    method: "POST",
+    headers: { "X-API-Key": SCAN_API_KEY },
+  });
+  if (!res.ok && res.status !== 202) throw new Error(`Refresh trigger error: ${res.status}`);
+}
+
+export async function fetchFundamentalsStatus(): Promise<{
+  cached: boolean;
+  count?: number;
+  cached_at?: string;
+}> {
+  try {
+    const res = await fetch(`${BACKEND_URL}/api/screener/nl/fundamentals-status`);
+    if (!res.ok) return { cached: false };
+    return res.json();
+  } catch {
+    return { cached: false };
+  }
 }

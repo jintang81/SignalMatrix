@@ -559,3 +559,56 @@ export interface AIStrategyResult {
   sectors:               Record<string, AIStrategySector>;
   scan_time?:            string;
 }
+
+// ─── NL Stock Screener Types ──────────────────────────────────────
+
+export interface NLStock {
+  ticker:          string;
+  name:            string;
+  sector:          string | null;
+  industry:        string | null;
+  market_cap:      number | null;
+  pe_ratio:        number | null;
+  forward_pe:      number | null;
+  pb_ratio:        number | null;
+  revenue_growth:  number | null;
+  profit_margin:   number | null;
+  debt_to_equity:  number | null;
+  dividend_yield:  number | null;
+  week52_high:     number | null;
+  week52_low:      number | null;
+  price:           number | null;
+  roe:             number | null;
+  earnings_growth: number | null;
+}
+
+export interface NLFilters {
+  sector?:               string;
+  industry?:             string;
+  market_cap_min?:       number;
+  market_cap_max?:       number;
+  pe_ratio_min?:         number;
+  pe_ratio_max?:         number;
+  pb_ratio_min?:         number;
+  pb_ratio_max?:         number;
+  revenue_growth_min?:   number;
+  revenue_growth_max?:   number;
+  profit_margin_min?:    number;
+  profit_margin_max?:    number;
+  debt_to_equity_max?:   number;
+  dividend_yield_min?:   number;
+  week52_position_min?:  number;
+  roe_min?:              number;
+}
+
+export interface NLSearchResult {
+  query:              string;
+  display_name:       string;
+  reasoning:          string;
+  filters:            NLFilters;
+  sort_by:            string;
+  total_matched:      number;
+  stocks:             NLStock[];
+  fundamentals_date:  string;
+  scan_time:          string;
+}

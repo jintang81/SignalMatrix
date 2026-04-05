@@ -36,6 +36,7 @@ from fastapi import BackgroundTasks, FastAPI, Header, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 
 from redis_client import (
+    get_nl_fundamentals,
     get_result, get_status, set_result, set_status,
     get_volume_result, get_volume_status, set_volume_result, set_volume_status,
     get_duck_result, get_duck_status, set_duck_result, set_duck_status,
@@ -59,6 +60,7 @@ from screener_top_divergence import run_top_divergence_scan
 from screener_top_volume import run_top_volume_scan
 from screener_inverted_duck_bill import run_inverted_duck_scan as run_inverted_duck_scan_fn
 from ai_strategy import run_ai_strategy
+from screener_nl import run_nl_search, run_fundamentals_refresh
 
 # ─── App ──────────────────────────────────────────────────────────
 
@@ -113,6 +115,7 @@ _top_div_executor = ThreadPoolExecutor(max_workers=1)   # one top-divergence sca
 _top_vol_executor = ThreadPoolExecutor(max_workers=1)   # one top-volume scan at a time
 _ai_strategy_executor      = ThreadPoolExecutor(max_workers=1)  # one AI strategy at a time
 _inverted_duck_executor    = ThreadPoolExecutor(max_workers=1)  # one inverted-duck scan at a time
+_nl_executor               = ThreadPoolExecutor(max_workers=2)  # NL search + fundamentals refresh
 
 
 # ─── Endpoints ────────────────────────────────────────────────────
@@ -547,6 +550,82 @@ async def trigger_inverted_duck_scan(
     return {"message": "inverted-duck scan started"}
 
 
+# ─── NL Screener Endpoints ───────────────────────────────────────
+
+from pydantic import BaseModel
+
+
+class NLSearchRequest(BaseModel):
+    query: str
+
+
+@app.post("/api/screener/nl")
+async def nl_screener(
+    body: NLSearchRequest,
+    x_api_key: str = Header(None),
+):
+    """
+    Natural language stock screener.
+    Calls Claude Haiku to parse the query, applies filters to the
+    cached S&P 500 fundamental universe, returns up to 25 matching stocks.
+    Returns 503 if the fundamentals cache is empty.
+    """
+    if not API_KEY or x_api_key != API_KEY:
+        raise HTTPException(status_code=401, detail="Invalid or missing API key")
+
+    query = body.query.strip()
+    if not query:
+        raise HTTPException(status_code=400, detail="query must not be empty")
+    if len(query) > 500:
+        raise HTTPException(status_code=400, detail="query too long (max 500 chars)")
+
+    cached = get_nl_fundamentals()
+    if cached is None:
+        raise HTTPException(
+            status_code=503,
+            detail="基本面数据未缓存，请稍后再试（后台将在每日 16:30 PDT 自动刷新）",
+        )
+
+    loop = asyncio.get_event_loop()
+    try:
+        result = await loop.run_in_executor(_nl_executor, run_nl_search, query)
+    except RuntimeError as e:
+        raise HTTPException(status_code=503, detail=str(e))
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Search failed: {str(e)[:200]}")
+
+    return result
+
+
+@app.post("/api/screener/nl/refresh-fundamentals", status_code=202)
+async def nl_refresh_fundamentals(
+    background_tasks: BackgroundTasks,
+    x_api_key: str = Header(None),
+):
+    """
+    Triggers a background refresh of the S&P 500 fundamental data cache.
+    Takes ~60-90 seconds. Required before /api/screener/nl can serve results.
+    """
+    if not API_KEY or x_api_key != API_KEY:
+        raise HTTPException(status_code=401, detail="Invalid or missing API key")
+
+    background_tasks.add_task(_run_nl_refresh_task)
+    return {"message": "fundamentals refresh started"}
+
+
+@app.get("/api/screener/nl/fundamentals-status")
+def nl_fundamentals_status():
+    """Returns cache metadata (count + cached_at) or {cached: false} if not cached."""
+    cached = get_nl_fundamentals()
+    if cached is None:
+        return {"cached": False}
+    return {
+        "cached": True,
+        "count": cached.get("count", 0),
+        "cached_at": cached.get("cached_at", ""),
+    }
+
+
 # ─── Background tasks ─────────────────────────────────────────────
 
 async def _run_scan_task() -> None:
@@ -627,3 +706,11 @@ async def _run_inverted_duck_scan_task() -> None:
         set_inverted_duck_status("done")
     except Exception as exc:
         set_inverted_duck_status("error", error=str(exc)[:200])
+
+
+async def _run_nl_refresh_task() -> None:
+    loop = asyncio.get_event_loop()
+    try:
+        await loop.run_in_executor(_nl_executor, run_fundamentals_refresh)
+    except Exception as exc:
+        print(f"NL fundamentals refresh failed: {exc}", flush=True)

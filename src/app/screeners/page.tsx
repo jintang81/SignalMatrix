@@ -1,4 +1,10 @@
+"use client";
+
+import { useState } from "react";
 import Link from "next/link";
+import NLSearchBar from "@/components/screeners/NLSearchBar";
+import NLResultsPanel from "@/components/screeners/NLResultsPanel";
+import type { NLSearchResult } from "@/types";
 
 // ─── Data ─────────────────────────────────────────────────────────
 
@@ -146,7 +152,6 @@ function Section({
 }) {
   return (
     <div className="space-y-3">
-      {/* Section header */}
       <div className="flex items-center gap-3">
         <div className="w-1 h-5 rounded-full" style={{ background: accent }} />
         <div>
@@ -157,7 +162,6 @@ function Section({
         </div>
         <div className="flex-1 h-px bg-border/40" />
       </div>
-      {/* Cards grid */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
         {screeners.map((s) => (
           <ScreenerCard key={s.id} s={s} accent={accent} />
@@ -170,6 +174,9 @@ function Section({
 // ─── Page ─────────────────────────────────────────────────────────
 
 export default function ScreeerPage() {
+  const [nlResult, setNlResult]   = useState<NLSearchResult | null>(null);
+  const [nlLoading, setNlLoading] = useState(false);
+
   return (
     <div className="py-6 space-y-3 min-h-[calc(100dvh-3.5rem)]">
       {/* Header */}
@@ -180,6 +187,19 @@ export default function ScreeerPage() {
         </p>
       </div>
 
+      {/* NL Search */}
+      <NLSearchBar onResults={setNlResult} onLoading={setNlLoading} />
+
+      {/* NL Results */}
+      {nlLoading && (
+        <div className="panel p-8 flex items-center justify-center gap-3">
+          <span className="w-4 h-4 border border-gold/60 border-t-transparent rounded-full animate-spin" />
+          <span className="text-[11px] text-muted/60 font-chinese">AI 正在解析条件并筛选…</span>
+        </div>
+      )}
+      {!nlLoading && nlResult && <NLResultsPanel result={nlResult} />}
+
+      {/* Existing screener sections */}
       <Section
         title="BULL SIGNAL"
         titleZh="多头信号"

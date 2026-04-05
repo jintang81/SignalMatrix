@@ -469,6 +469,24 @@ def get_inverted_duck_snapshot_index() -> list:
     return _get_snapshot_index(INVERTED_DUCK_SNAP_PREFIX)
 
 
+# ─── NL Screener: Fundamentals cache ─────────────────────────────
+
+NL_FUNDAMENTALS_KEY = "screener:nl:fundamentals"
+NL_FUNDAMENTALS_TTL = 48 * 3600  # 48 hours
+
+
+def get_nl_fundamentals() -> dict | None:
+    """Returns cached fundamentals dict {stocks, count, cached_at}, or None."""
+    raw = _get_redis().get(NL_FUNDAMENTALS_KEY)
+    if raw is None:
+        return None
+    return json.loads(raw) if isinstance(raw, str) else raw
+
+
+def set_nl_fundamentals(data: dict) -> None:
+    _get_redis().setex(NL_FUNDAMENTALS_KEY, NL_FUNDAMENTALS_TTL, json.dumps(data, ensure_ascii=False))
+
+
 # ─── AI Strategy daily snapshots ─────────────────────────────────
 
 AI_STRATEGY_SNAP_PREFIX = "screener:ai-strategy:snapshot"
