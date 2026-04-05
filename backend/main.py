@@ -14,6 +14,10 @@ Endpoints:
   GET  /api/screener/duck/status      — check duck scan status
   POST /api/screener/duck/run         — trigger a duck scan (requires X-API-Key header)
 
+  GET  /api/screener/inverted-duck             — return cached inverted-duck-bill scan results
+  GET  /api/screener/inverted-duck/status      — check inverted-duck scan status
+  POST /api/screener/inverted-duck/run         — trigger an inverted-duck scan (requires X-API-Key header)
+
   GET  /api/screener/options          — return cached unusual-options scan results
   GET  /api/screener/options/status   — check options scan status
   POST /api/screener/options/run      — trigger an options scan (requires X-API-Key header)
@@ -43,6 +47,8 @@ from redis_client import (
     get_top_div_result, get_top_div_status, set_top_div_result, set_top_div_status,
     get_top_vol_result, get_top_vol_status, set_top_vol_result, set_top_vol_status,
     get_ai_strategy_result, get_ai_strategy_status, set_ai_strategy_result, set_ai_strategy_status,
+    get_inverted_duck_result, get_inverted_duck_status, set_inverted_duck_result, set_inverted_duck_status,
+    get_inverted_duck_snapshot_index, get_inverted_duck_daily_snapshot,
 )
 from screener import run_full_scan
 from screener_volume import run_volume_scan
@@ -50,6 +56,7 @@ from screener_duck import run_duck_scan
 from screener_options import run_options_scan
 from screener_top_divergence import run_top_divergence_scan
 from screener_top_volume import run_top_volume_scan
+from screener_inverted_duck_bill import run_inverted_duck_scan as run_inverted_duck_scan_fn
 from ai_strategy import run_ai_strategy
 
 # ─── App ──────────────────────────────────────────────────────────
@@ -78,8 +85,9 @@ def _reset_stale_running_statuses():
         (get_duck_status,      set_duck_status),
         (get_options_status,   set_options_status),
         (get_top_div_status,   set_top_div_status),
-        (get_top_vol_status,   set_top_vol_status),
-        (get_ai_strategy_status, set_ai_strategy_status),
+        (get_top_vol_status,       set_top_vol_status),
+        (get_ai_strategy_status,   set_ai_strategy_status),
+        (get_inverted_duck_status, set_inverted_duck_status),
     ]:
         try:
             if get_fn().get("status") == "running":
@@ -102,7 +110,8 @@ _duck_executor    = ThreadPoolExecutor(max_workers=1)   # one duck scan at a tim
 _options_executor = ThreadPoolExecutor(max_workers=1)   # one options scan at a time
 _top_div_executor = ThreadPoolExecutor(max_workers=1)   # one top-divergence scan at a time
 _top_vol_executor = ThreadPoolExecutor(max_workers=1)   # one top-volume scan at a time
-_ai_strategy_executor = ThreadPoolExecutor(max_workers=1)  # one AI strategy at a time
+_ai_strategy_executor      = ThreadPoolExecutor(max_workers=1)  # one AI strategy at a time
+_inverted_duck_executor    = ThreadPoolExecutor(max_workers=1)  # one inverted-duck scan at a time
 
 
 # ─── Endpoints ────────────────────────────────────────────────────
@@ -465,6 +474,63 @@ async def trigger_ai_strategy(
     return {"message": "AI strategy generation started"}
 
 
+# ─── Inverted Duck Bill Endpoints ────────────────────────────────
+
+@app.get("/api/screener/inverted-duck")
+def get_inverted_duck():
+    """Returns the most recent inverted-duck-bill scan results from Redis cache."""
+    data = get_inverted_duck_result()
+    if data is None:
+        raise HTTPException(
+            status_code=404,
+            detail="No inverted-duck scan results yet. Trigger a scan first via POST /api/screener/inverted-duck/run",
+        )
+    return data
+
+
+@app.get("/api/screener/inverted-duck/status")
+def get_inverted_duck_scan_status():
+    """Returns current inverted-duck scan status: idle | running | done | error."""
+    return get_inverted_duck_status()
+
+
+@app.get("/api/screener/inverted-duck/snapshots")
+def get_inverted_duck_snapshots(date: str | None = None):
+    """
+    Backtesting endpoint for 倒鸭嘴.
+    - No params: returns index of available snapshot dates.
+    - ?date=YYYY-MM-DD: returns that day's lightweight snapshot.
+    """
+    if date:
+        snap = get_inverted_duck_daily_snapshot(date)
+        if snap is None:
+            raise HTTPException(status_code=404, detail=f"No inverted-duck snapshot for {date}")
+        return snap
+    return {"dates": get_inverted_duck_snapshot_index()}
+
+
+@app.post("/api/screener/inverted-duck/run", status_code=202)
+async def trigger_inverted_duck_scan(
+    background_tasks: BackgroundTasks,
+    x_api_key: str = Header(None),
+):
+    """
+    Triggers an async background inverted-duck-bill scan.
+    Requires X-API-Key header matching the API_KEY env var.
+    Returns 202 immediately; poll /api/screener/inverted-duck/status for progress.
+    """
+    if not API_KEY or x_api_key != API_KEY:
+        raise HTTPException(status_code=401, detail="Invalid or missing API key")
+
+    current = get_inverted_duck_status()
+    if current.get("status") == "running":
+        return {"message": "inverted-duck scan already running", "status": current}
+
+    set_inverted_duck_status("running")
+    background_tasks.add_task(_run_inverted_duck_scan_task)
+    return {"message": "inverted-duck scan started"}
+
+
 # ─── Background tasks ─────────────────────────────────────────────
 
 async def _run_scan_task() -> None:
@@ -535,3 +601,13 @@ async def _run_ai_strategy_task() -> None:
         set_ai_strategy_status("done")
     except Exception as exc:
         set_ai_strategy_status("error", error=str(exc)[:200])
+
+
+async def _run_inverted_duck_scan_task() -> None:
+    loop = asyncio.get_event_loop()
+    try:
+        result = await loop.run_in_executor(_inverted_duck_executor, run_inverted_duck_scan_fn)
+        set_inverted_duck_result(result)
+        set_inverted_duck_status("done")
+    except Exception as exc:
+        set_inverted_duck_status("error", error=str(exc)[:200])

@@ -357,6 +357,32 @@ export interface DuckScreenerResult {
   stocks: DuckStock[];
 }
 
+// ─── Inverted Duck Bill Screener Types ────────────────────────────
+// Same data shape as duck bill, semantic difference is bearish (0 axis below)
+
+export type InvertedDuckChartData = DuckChartData;
+export type InvertedDuckDetail    = DuckDetail;
+
+export interface InvertedDuckStock {
+  ticker: string;
+  is_etf: boolean;
+  price: number;
+  pct_change: number;
+  mktcap_b: number | null;
+  ma5: number;
+  ma10: number;
+  ma20: number;
+  vol_ratio: number;
+  duck: InvertedDuckDetail;
+  chart: InvertedDuckChartData;
+}
+
+export interface InvertedDuckScreenerResult {
+  date: string;
+  scan_time?: string;
+  stocks: InvertedDuckStock[];
+}
+
 // ─── Top Divergence Screener Types ────────────────────────────────
 
 export interface TopDivDetail {

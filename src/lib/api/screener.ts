@@ -23,6 +23,8 @@ import type {
   TopVolumeSurgeStock,
   TopVolumeSurgeChartData,
   AIStrategyResult,
+  InvertedDuckScreenerResult,
+  InvertedDuckStock,
 } from "@/types";
 
 // ─── Backend URLs ─────────────────────────────────────────────────
@@ -1000,6 +1002,136 @@ function generateTopVolPriceSeries(startPrice: number, endPrice: number, n: numb
     const base = startPrice + (endPrice - startPrice) * t;
     const noise = base * (Math.random() - 0.5) * 0.02;
     arr.push(Math.max(base + noise, 0.01));
+  }
+  const scale = endPrice / arr[arr.length - 1];
+  return arr.map((v) => v * scale);
+}
+
+// ─── Inverted Duck Bill Public API ───────────────────────────────
+
+export async function fetchInvertedDuckScreener(): Promise<InvertedDuckScreenerResult> {
+  if (BACKEND_URL) {
+    const res = await fetch(`${BACKEND_URL}/api/screener/inverted-duck`);
+    if (res.status === 404) return MOCK_INVERTED_DUCK_DATA;
+    if (!res.ok) throw new Error(`Inverted duck screener API error: ${res.status}`);
+    return res.json();
+  }
+  await new Promise((r) => setTimeout(r, 600));
+  return MOCK_INVERTED_DUCK_DATA;
+}
+
+export async function fetchInvertedDuckStatus(): Promise<ScanStatus> {
+  if (!BACKEND_URL) return { status: "idle" };
+  try {
+    const res = await fetch(`${BACKEND_URL}/api/screener/inverted-duck/status`);
+    if (!res.ok) return { status: "idle" };
+    return res.json();
+  } catch {
+    return { status: "idle" };
+  }
+}
+
+export async function triggerInvertedDuckScan(): Promise<void> {
+  if (!BACKEND_URL) return;
+  const res = await fetch(`${BACKEND_URL}/api/screener/inverted-duck/run`, {
+    method: "POST",
+    headers: { "X-API-Key": SCAN_API_KEY },
+  });
+  if (!res.ok && res.status !== 202) throw new Error(`Inverted duck trigger error: ${res.status}`);
+}
+
+// ─── Inverted Duck Bill Mock Data ─────────────────────────────────
+
+export const MOCK_INVERTED_DUCK_DATA: InvertedDuckScreenerResult = {
+  date: "2026-04-04",
+  scan_time: "2026-04-04 17:55:00 PDT",
+  stocks: [
+    makeMockInvertedDuckStock("TSLA",  172.80, -6.4,  812.0, 2.1, false, 32.5, 0.018, 2),
+    makeMockInvertedDuckStock("NVDA",  865.30, -3.2, 2130.0, 1.8, false, 28.7, 0.024, 1),
+    makeMockInvertedDuckStock("ARKK",   42.10, -2.9,  null,  1.6, true,  35.1, 0.021, 3),
+    makeMockInvertedDuckStock("SMCI",   35.40, -5.1,  null,  2.4, false, 29.8, 0.031, 2),
+  ],
+};
+
+function makeMockInvertedDuckStock(
+  ticker: string,
+  price: number,
+  pctChange: number,
+  mktcapB: number | null,
+  volRatio: number,
+  isEtf: boolean,
+  divergeAngle: number,
+  gapRatioMin: number,
+  barsSinceReversal: number,
+): InvertedDuckStock {
+  const N = 60;
+  // Generate a declining price series (bear market)
+  const closes = generateInvertedDuckPriceSeries(price, N);
+  const open:   number[] = [];
+  const high:   number[] = [];
+  const low:    number[] = [];
+  const volume: number[] = [];
+
+  for (let i = 0; i < N; i++) {
+    const c = closes[i];
+    const range = c * (0.008 + Math.random() * 0.012);
+    const o = c + (Math.random() - 0.48) * range; // slight bear bias
+    open.push(+o.toFixed(2));
+    high.push(+(Math.max(c, o) + Math.random() * range * 0.5).toFixed(2));
+    low.push( +(Math.min(c, o) - Math.random() * range * 0.5).toFixed(2));
+    volume.push(Math.round(5e6 + Math.random() * 20e6));
+  }
+
+  // Build MACD below zero (inverted duck pattern)
+  const macdRes = calcMACDArr(closes);
+  const diffShift = -Math.max(0, Math.max(...macdRes.diff.map(v => v ?? 0))) - price * 0.002;
+  const diff = macdRes.diff.map(v => +((v ?? 0) + diffShift).toFixed(4));
+  const dea  = macdRes.dea.map(v  => +((v ?? 0) + diffShift * 0.7).toFixed(4));
+  const hist = diff.map((v, i) => +((v - dea[i]) * 2).toFixed(4));
+
+  const dates = generateDates(N);
+  const chart = {
+    dates,
+    open, high, low,
+    close: closes.map((v) => +v.toFixed(2)),
+    volume,
+    diff, dea, hist,
+  };
+
+  // MA values (bearish: ma5 < ma10 < ma20)
+  const ma20 = +closes.slice(-20).reduce((a, b) => a + b, 0) / 20;
+  const ma10 = +closes.slice(-10).reduce((a, b) => a + b, 0) / 10;
+  const ma5  = +closes.slice(-5).reduce((a, b) => a + b, 0) / 5;
+
+  const reversal_date = generateDates(N)[N - 1 - barsSinceReversal] ?? "2026-04-03";
+
+  return {
+    ticker, is_etf: isEtf, price, pct_change: pctChange,
+    mktcap_b: mktcapB, ma5: +ma5.toFixed(2), ma10: +ma10.toFixed(2), ma20: +ma20.toFixed(2),
+    vol_ratio: volRatio,
+    duck: {
+      diff_latest:         diff[diff.length - 1],
+      dea_latest:          dea[dea.length - 1],
+      hist_latest:         hist[hist.length - 1],
+      gap_ratio_min:       +(gapRatioMin * 100).toFixed(3),
+      bars_since_reversal: barsSinceReversal,
+      diverge_angle:       divergeAngle,
+      reversal_date,
+    },
+    chart,
+  };
+}
+
+function generateInvertedDuckPriceSeries(endPrice: number, n: number): number[] {
+  // Declining trend with a brief bounce in the middle (inverted duck bill shape)
+  const arr: number[] = [];
+  const startPrice = endPrice * 1.15; // start higher, decline to endPrice
+  for (let i = 0; i < n; i++) {
+    const t = i / (n - 1);
+    const bounce = Math.exp(-((t - 0.65) ** 2) / 0.01) * 0.025;
+    const base = startPrice + (endPrice - startPrice) * t + endPrice * bounce;
+    const noise = base * (Math.random() - 0.52) * 0.015;
+    arr.push(Math.max(base + noise, endPrice * 0.5));
   }
   const scale = endPrice / arr[arr.length - 1];
   return arr.map((v) => v * scale);

@@ -65,10 +65,10 @@ const BEAR_SIGNAL: Screener[] = [
     id: "inverted-duck-bill",
     name: "INVERTED DUCK BILL",
     nameZh: "倒鸭嘴形态",
-    desc: "短期均线加速下穿长期均线，均线倒置张开，趋势加速做空信号。",
-    tags: ["均线形态", "趋势加速", "空头排列"],
+    desc: "MACD DIFF 超速下穿 DEA 形成倒鸭嘴形态，全程零轴下方 — 趋势加速下行的空头信号。",
+    tags: ["MACD 形态", "趋势加速", "零轴下方", "空头排列"],
     href: "/screeners/inverted-duck-bill",
-    available: false,
+    available: true,
   },
 ];
 
