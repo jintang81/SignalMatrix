@@ -1,10 +1,7 @@
 "use client";
 
-import { useState } from "react";
 import Link from "next/link";
 import NLSearchBar from "@/components/screeners/NLSearchBar";
-import NLResultsPanel from "@/components/screeners/NLResultsPanel";
-import type { NLSearchResult } from "@/types";
 
 // ─── Data ─────────────────────────────────────────────────────────
 
@@ -174,9 +171,6 @@ function Section({
 // ─── Page ─────────────────────────────────────────────────────────
 
 export default function ScreeerPage() {
-  const [nlResult, setNlResult]   = useState<NLSearchResult | null>(null);
-  const [nlLoading, setNlLoading] = useState(false);
-
   return (
     <div className="py-6 space-y-3 min-h-[calc(100dvh-3.5rem)]">
       {/* Header */}
@@ -223,19 +217,8 @@ export default function ScreeerPage() {
           {AI_STRATEGY.map((s) => (
             <ScreenerCard key={s.id} s={s} accent="#c9a84c" />
           ))}
-          <NLSearchBar
-            onResults={setNlResult}
-            onLoading={setNlLoading}
-            className="sm:col-span-1 lg:col-span-3"
-          />
+          <NLSearchBar className="sm:col-span-1 lg:col-span-3" />
         </div>
-        {nlLoading && (
-          <div className="panel p-8 flex items-center justify-center gap-3">
-            <span className="w-4 h-4 border border-gold/60 border-t-transparent rounded-full animate-spin" />
-            <span className="text-[11px] text-muted/60 font-chinese">AI 正在解析条件并筛选…</span>
-          </div>
-        )}
-        {!nlLoading && nlResult && <NLResultsPanel result={nlResult} />}
       </div>
     </div>
   );

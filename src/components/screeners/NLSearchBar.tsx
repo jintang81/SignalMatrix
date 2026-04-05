@@ -1,12 +1,9 @@
 "use client";
 
-import { useState, useRef, useCallback } from "react";
-import { searchNLScreener } from "@/lib/api/screener";
-import type { NLSearchResult } from "@/types";
+import { useState, useRef } from "react";
+import { useRouter } from "next/navigation";
 
 interface Props {
-  onResults: (result: NLSearchResult | null) => void;
-  onLoading: (loading: boolean) => void;
   className?: string;
 }
 
@@ -17,32 +14,16 @@ const EXAMPLES = [
   "半导体行业营收增长强劲",
 ];
 
-export default function NLSearchBar({ onResults, onLoading, className }: Props) {
-  const [query, setQuery]       = useState("");
-  const [isSearching, setIsSearching] = useState(false);
-  const [error, setError]       = useState<string | null>(null);
+export default function NLSearchBar({ className }: Props) {
+  const [query, setQuery] = useState("");
   const inputRef = useRef<HTMLInputElement>(null);
+  const router = useRouter();
 
-  const handleSearch = useCallback(async () => {
+  const handleSearch = () => {
     const q = query.trim();
-    if (!q || isSearching) return;
-
-    setIsSearching(true);
-    setError(null);
-    onLoading(true);
-    onResults(null);
-
-    try {
-      const result = await searchNLScreener(q);
-      onResults(result);
-    } catch (e: unknown) {
-      setError(e instanceof Error ? e.message : String(e));
-      onResults(null);
-    } finally {
-      setIsSearching(false);
-      onLoading(false);
-    }
-  }, [query, isSearching, onResults, onLoading]);
+    if (!q) return;
+    router.push(`/screeners/nl-results?q=${encodeURIComponent(q)}`);
+  };
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
     if (e.key === "Enter") handleSearch();
@@ -69,19 +50,13 @@ export default function NLSearchBar({ onResults, onLoading, className }: Props) 
           className="flex-1 bg-bg-2 border border-border rounded px-3 py-1.5 text-[12px]
                      text-txt placeholder:text-muted/40 outline-none
                      focus:border-gold/50 transition-colors font-chinese"
-          disabled={isSearching}
         />
         <button
           onClick={handleSearch}
-          disabled={isSearching || !query.trim()}
+          disabled={!query.trim()}
           className="btn text-[11px] px-4 whitespace-nowrap disabled:opacity-40 hover:border-gold/50 hover:text-gold transition-colors"
         >
-          {isSearching ? (
-            <span className="flex items-center gap-1.5">
-              <span className="inline-block w-3 h-3 border border-gold/60 border-t-transparent rounded-full animate-spin" />
-              筛选中…
-            </span>
-          ) : "AI 筛选 →"}
+          AI 筛选 →
         </button>
       </div>
 
@@ -91,20 +66,13 @@ export default function NLSearchBar({ onResults, onLoading, className }: Props) 
           <button
             key={ex}
             onClick={() => { setQuery(ex); inputRef.current?.focus(); }}
-            disabled={isSearching}
             className="text-[10px] text-muted/50 border border-border/50 rounded px-2 py-0.5
-                       hover:border-gold/40 hover:text-gold/70 transition-colors font-chinese
-                       disabled:opacity-30"
+                       hover:border-gold/40 hover:text-gold/70 transition-colors font-chinese"
           >
             {ex}
           </button>
         ))}
       </div>
-
-      {/* Error */}
-      {error && (
-        <p className="text-[11px] text-dn/80 font-chinese">{error}</p>
-      )}
     </div>
   );
 }
