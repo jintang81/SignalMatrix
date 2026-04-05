@@ -32,6 +32,7 @@ import requests
 from redis_client import (
     get_options_oi_snapshot, set_options_oi_snapshot,
     get_options_flow_history, set_options_flow_history,
+    set_options_daily_snapshot,
 )
 
 # ─────────────────────────────────────────────────────────────
@@ -689,6 +690,26 @@ def run_options_scan() -> dict:
     # ── Persist updated Redis state ───────────────────────────
     set_options_oi_snapshot(new_oi_snap_full)
     set_options_flow_history(flow_history)
+
+    # ── Daily snapshot for backtesting ────────────────────────
+    # Lightweight: only stocks with ≥1★, key fields only
+    sm_signal = lambda r: next(
+        (s for s in r["signals"] if s["name"] == "SMART_MONEY_SWEEP"), {}
+    )
+    snapshot_entries = [
+        {
+            "ticker":           r["ticker"],
+            "price":            r["price"],
+            "stars":            r["stars"],
+            "overall":          r["overall"],
+            "sm_direction":     sm_signal(r).get("direction"),
+            "sm_call_premium":  sm_signal(r).get("data", {}).get("sm_call_premium", 0),
+            "sm_put_premium":   sm_signal(r).get("data", {}).get("sm_put_premium", 0),
+        }
+        for r in results
+        if r["stars"] >= 1
+    ]
+    set_options_daily_snapshot(date_str, snapshot_entries)
 
     return {
         "date":      date_str,

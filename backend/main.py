@@ -36,6 +36,7 @@ from redis_client import (
     get_volume_result, get_volume_status, set_volume_result, set_volume_status,
     get_duck_result, get_duck_status, set_duck_result, set_duck_status,
     get_options_result, get_options_status, set_options_result, set_options_status,
+    get_options_snapshot_index, get_options_daily_snapshot,
     get_top_div_result, get_top_div_status, set_top_div_result, set_top_div_status,
     get_top_vol_result, get_top_vol_status, set_top_vol_result, set_top_vol_status,
     get_ai_strategy_result, get_ai_strategy_status, set_ai_strategy_result, set_ai_strategy_status,
@@ -250,6 +251,21 @@ def get_options():
 def get_options_scan_status():
     """Returns current options scan status: idle | running | done | error."""
     return get_options_status()
+
+
+@app.get("/api/screener/options/snapshots")
+def get_options_snapshots(date: str | None = None):
+    """
+    Backtesting endpoint.
+    - No params: returns index of available snapshot dates.
+    - ?date=YYYY-MM-DD: returns that day's lightweight snapshot.
+    """
+    if date:
+        snap = get_options_daily_snapshot(date)
+        if snap is None:
+            raise HTTPException(status_code=404, detail=f"No snapshot for {date}")
+        return snap
+    return {"dates": get_options_snapshot_index()}
 
 
 @app.post("/api/screener/options/run", status_code=202)

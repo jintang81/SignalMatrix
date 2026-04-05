@@ -282,3 +282,52 @@ def get_options_flow_history() -> dict:
 
 def set_options_flow_history(data: dict) -> None:
     _get_redis().setex(OPTIONS_FLOW_HIST_KEY, 7 * 24 * 3600, json.dumps(data))
+
+
+# ─── Options daily snapshots (for backtesting) ────────────────────
+# Key pattern : screener:options:snapshot:{YYYY-MM-DD}
+# Index key   : screener:options:snapshot:index  (sorted list of dates)
+# TTL         : 90 days per snapshot, 180 days for index
+
+SNAPSHOT_TTL       = 90  * 24 * 3600   # 90 days
+SNAPSHOT_INDEX_TTL = 180 * 24 * 3600   # 180 days
+SNAPSHOT_INDEX_KEY = "screener:options:snapshot:index"
+
+
+def _snapshot_key(date_str: str) -> str:
+    return f"screener:options:snapshot:{date_str}"
+
+
+def set_options_daily_snapshot(date_str: str, entries: list) -> None:
+    """
+    Persist a lightweight daily snapshot for backtesting.
+    entries: list of { ticker, price, stars, overall, sm_direction,
+                        sm_call_premium, sm_put_premium }
+    """
+    r = _get_redis()
+    payload = {"date": date_str, "entries": entries}
+    r.setex(_snapshot_key(date_str), SNAPSHOT_TTL, json.dumps(payload))
+
+    # Update sorted index (list of date strings, deduped)
+    raw = r.get(SNAPSHOT_INDEX_KEY)
+    dates: list = json.loads(raw) if isinstance(raw, str) and raw else []
+    if date_str not in dates:
+        dates.append(date_str)
+        dates.sort()
+    r.setex(SNAPSHOT_INDEX_KEY, SNAPSHOT_INDEX_TTL, json.dumps(dates))
+
+
+def get_options_snapshot_index() -> list:
+    """Returns sorted list of available snapshot date strings."""
+    raw = _get_redis().get(SNAPSHOT_INDEX_KEY)
+    if not raw:
+        return []
+    return json.loads(raw) if isinstance(raw, str) else raw
+
+
+def get_options_daily_snapshot(date_str: str) -> dict | None:
+    """Returns the snapshot for a specific date, or None if not found."""
+    raw = _get_redis().get(_snapshot_key(date_str))
+    if raw is None:
+        return None
+    return json.loads(raw) if isinstance(raw, str) else raw
