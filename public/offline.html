@@ -1,0 +1,90 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <title>SignalMatrix — 离线</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+
+    body {
+      background: #0c0f18;
+      color: #e2e8f0;
+      font-family: 'Courier New', monospace;
+      min-height: 100dvh;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      padding: 24px;
+      padding-bottom: calc(24px + env(safe-area-inset-bottom));
+    }
+
+    .container {
+      text-align: center;
+      max-width: 320px;
+    }
+
+    .logo {
+      font-size: 13px;
+      letter-spacing: 0.28em;
+      color: #c9a84c;
+      margin-bottom: 40px;
+    }
+
+    .logo .dot {
+      color: #2e3a50;
+      margin: 0 6px;
+    }
+
+    .icon {
+      font-size: 48px;
+      margin-bottom: 20px;
+      opacity: 0.4;
+    }
+
+    h1 {
+      font-size: 13px;
+      letter-spacing: 0.18em;
+      color: #94a3b8;
+      margin-bottom: 12px;
+    }
+
+    p {
+      font-size: 11px;
+      color: #94a3b8;
+      opacity: 0.6;
+      line-height: 1.6;
+      margin-bottom: 32px;
+    }
+
+    button {
+      background: transparent;
+      border: 1px solid #2e3a50;
+      color: #94a3b8;
+      font-family: inherit;
+      font-size: 11px;
+      letter-spacing: 0.14em;
+      padding: 10px 24px;
+      cursor: pointer;
+      border-radius: 4px;
+      transition: border-color 0.2s, color 0.2s;
+      min-height: 44px;
+    }
+
+    button:hover {
+      border-color: #c9a84c;
+      color: #c9a84c;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="logo">SIGNAL<span class="dot">·</span>MATRIX</div>
+    <div class="icon">◎</div>
+    <h1>NO CONNECTION</h1>
+    <p>无网络连接<br/>请检查网络后重试</p>
+    <button onclick="window.location.reload()">RETRY →</button>
+  </div>
+</body>
+</html>

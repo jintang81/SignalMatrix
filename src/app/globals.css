@@ -126,6 +126,25 @@ body {
   }
 }
 
+/* ─── Mobile / PWA ─────────────────────────── */
+
+/* Safe area insets for iPhone notch and home indicator */
+body {
+  padding-bottom: env(safe-area-inset-bottom);
+}
+
+/* Prevent iOS zoom on input focus (requires font-size >= 16px) */
+input,
+select,
+textarea {
+  font-size: max(16px, 1em);
+}
+
+/* Touch target minimum size (Apple HIG / WCAG recommend 44px) */
+.btn {
+  min-height: 44px;
+}
+
 /* ─── Animations ────────────────────────────── */
 @keyframes pulse-dot {
   0%, 100% { opacity: 1; }

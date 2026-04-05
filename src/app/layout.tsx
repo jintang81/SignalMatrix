@@ -1,4 +1,4 @@
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 import { Share_Tech_Mono, Noto_Serif_SC } from "next/font/google";
 import "./globals.css";
 import Navbar from "@/components/layout/Navbar";
@@ -22,6 +22,22 @@ export const metadata: Metadata = {
   title: "SignalMatrix — 智能股票筛选与技术分析",
   description:
     "面向美股个人散户的智能股票筛选与技术分析平台。技术指标、Bull/Bear 信号筛选、AI 综合评分一体化。",
+  manifest: "/manifest.json",
+  icons: {
+    apple: "/icons/180.png",
+  },
+  appleWebApp: {
+    capable: true,
+    title: "SignalMatrix",
+    statusBarStyle: "black-translucent",
+  },
+};
+
+export const viewport: Viewport = {
+  width: "device-width",
+  initialScale: 1,
+  viewportFit: "cover",
+  themeColor: "#0c0f18",
 };
 
 export default function RootLayout({
@@ -39,6 +55,12 @@ export default function RootLayout({
         <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           {children}
         </main>
+        {/* Register service worker for PWA */}
+        <script
+          dangerouslySetInnerHTML={{
+            __html: `if('serviceWorker' in navigator){window.addEventListener('load',()=>navigator.serviceWorker.register('/sw.js'))}`,
+          }}
+        />
       </body>
     </html>
   );
