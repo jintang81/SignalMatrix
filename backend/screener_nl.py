@@ -12,6 +12,8 @@ Flow:
 
 import json
 import os
+import re
+import urllib.request
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import datetime
 from zoneinfo import ZoneInfo
@@ -25,35 +27,184 @@ ANTHROPIC_API_KEY = os.environ.get("ANTHROPIC_API_KEY", "")
 MAX_RESULTS = 25
 MAX_WORKERS = 20  # parallel yfinance fetches
 
-# ─── S&P 500 ticker list ──────────────────────────────────────────
+# ─── Ticker list (S&P 500 + NASDAQ-100) ──────────────────────────
 
 def _fetch_sp500_wiki() -> list[str]:
-    import pandas as pd
-    tables = pd.read_html("https://en.wikipedia.org/wiki/List_of_S%26P_500_companies")
-    tickers = tables[0]["Symbol"].tolist()
-    # Fix class-B share notation (e.g. BRK.B → BRK-B)
-    return [t.replace(".", "-") for t in tickers]
+    """Fetch S&P 500 tickers from Wikipedia using stdlib HTML parser (no pandas)."""
+    import html.parser as _hp
+
+    class _Parser(_hp.HTMLParser):
+        def __init__(self):
+            super().__init__()
+            self.in_first_table = False
+            self.row = []
+            self.rows = []
+            self.col_idx = None
+            self.header_done = False
+            self.td_text = ""
+            self.in_td = False
+            self.table_count = 0
+
+        def handle_starttag(self, tag, attrs):
+            attrs = dict(attrs)
+            if tag == "table" and "wikitable" in attrs.get("class", ""):
+                self.table_count += 1
+                if self.table_count == 1:
+                    self.in_first_table = True
+            if self.in_first_table and tag in ("td", "th"):
+                self.in_td = True
+                self.td_text = ""
+
+        def handle_endtag(self, tag):
+            if tag == "table" and self.in_first_table:
+                self.in_first_table = False
+            if self.in_first_table and tag in ("td", "th"):
+                self.in_td = False
+                self.row.append(self.td_text.strip())
+            if self.in_first_table and tag == "tr":
+                if not self.header_done:
+                    for i, h in enumerate(self.row):
+                        if "Symbol" in h or "Ticker" in h:
+                            self.col_idx = i
+                    self.header_done = True
+                else:
+                    if self.col_idx is not None and len(self.row) > self.col_idx:
+                        self.rows.append(self.row[self.col_idx])
+                self.row = []
+
+        def handle_data(self, data):
+            if self.in_td:
+                self.td_text += data
+
+    url = "https://en.wikipedia.org/wiki/List_of_S%26P_500_companies"
+    req = urllib.request.Request(url, headers={"User-Agent": "Mozilla/5.0"})
+    with urllib.request.urlopen(req, timeout=15) as resp:
+        content = resp.read().decode("utf-8")
+    parser = _Parser()
+    parser.feed(content)
+    tickers = [t.replace(".", "-") for t in parser.rows if t and t != "Symbol"]
+    if len(tickers) < 400:
+        raise ValueError(f"只解析到 {len(tickers)} 个 ticker")
+    return tickers
 
 
-# Fallback list (top 100 by market cap, updated periodically)
+def _fetch_nasdaq100_wiki() -> list[str]:
+    """Fetch NASDAQ-100 tickers from GitHub CSV or Wikipedia."""
+    csv_urls = [
+        "https://raw.githubusercontent.com/datasets/nasdaq-100/main/data/nasdaq-100.csv",
+    ]
+    for url in csv_urls:
+        try:
+            req = urllib.request.Request(url, headers={"User-Agent": "Mozilla/5.0"})
+            with urllib.request.urlopen(req, timeout=10) as resp:
+                lines = resp.read().decode("utf-8").splitlines()
+            if not lines:
+                continue
+            header = [h.strip().strip('"').lower() for h in lines[0].split(",")]
+            col = next((i for i, h in enumerate(header) if h in ("symbol", "ticker", "code")), None)
+            if col is None:
+                continue
+            tickers = []
+            for line in lines[1:]:
+                parts = line.split(",")
+                if len(parts) > col:
+                    t = parts[col].strip().strip('"').replace(".", "-")
+                    if t and t.upper() == t and len(t) <= 5:
+                        tickers.append(t)
+            if len(tickers) >= 80:
+                return tickers
+        except Exception:
+            continue
+
+    # Wikipedia fallback
+    url = "https://en.wikipedia.org/wiki/Nasdaq-100"
+    req = urllib.request.Request(url, headers={"User-Agent": "Mozilla/5.0"})
+    with urllib.request.urlopen(req, timeout=15) as resp:
+        content = resp.read().decode("utf-8")
+    ticker_pattern = re.compile(r"^[A-Z]{1,5}$")
+    table_starts = [m.start() for m in re.finditer(r'class="[^"]*wikitable', content)]
+    for t_start in table_starts:
+        t_end = content.find("</table>", t_start)
+        table_html = content[t_start:t_end]
+        rows = re.findall(r"<tr[^>]*>(.*?)</tr>", table_html, re.DOTALL | re.IGNORECASE)
+        tickers = []
+        for row in rows:
+            tds = re.findall(r"<td[^>]*>(.*?)</td>", row, re.DOTALL | re.IGNORECASE)
+            if tds:
+                first = re.sub(r"<[^>]+>", "", tds[0]).strip().replace(".", "-")
+                if ticker_pattern.match(first):
+                    tickers.append(first)
+        if len(tickers) >= 80:
+            return tickers
+    raise ValueError("所有数据源均失败")
+
+
 _FALLBACK_SP500 = [
-    "AAPL","MSFT","NVDA","AMZN","GOOGL","GOOG","META","TSLA","AVGO","BRK-B",
-    "JPM","LLY","V","UNH","XOM","MA","COST","ORCL","HD","PG","JNJ","WMT","ABBV",
-    "BAC","NFLX","CRM","KO","AMD","MRK","CVX","PEP","ACN","TMO","LIN","ADBE","WFC",
-    "MCD","CSCO","GE","ABT","IBM","TXN","MS","GS","AXP","AMGN","CAT","DHR","PM",
-    "ISRG","SPGI","BKNG","VZ","LOW","BLK","RTX","T","SYK","UBER","ETN","NEE","PFE",
-    "NOW","AMAT","DE","MMC","UNP","PANW","CB","PLD","VRTX","ADP","TJX","SCHW",
-    "MDT","C","BSX","ADI","GILD","SO","MU","BMY","ZTS","CME","ELV","CL","ITW",
-    "SHW","DUK","AON","GD","REGN","EMR","FI","MCO","APH","NOC","CEG","MMM",
+    "MMM","AOS","ABT","ABBV","ACN","ADBE","AMD","AES","AFL","A","APD","ABNB","AKAM","ALB","ARE",
+    "ALGN","ALLE","LNT","ALL","GOOGL","GOOG","MO","AMZN","AMCR","AEE","AAL","AEP","AXP","AIG",
+    "AMT","AWK","AMP","AME","AMGN","APH","ADI","ANSS","AON","APA","AAPL","AMAT","APTV","ACGL",
+    "ADM","ANET","AJG","AIZ","T","ATO","ADSK","ADP","AZO","AVB","AVY","AXON","BKR","BALL","BAC",
+    "BK","BBWI","BAX","BDX","WRB","BBY","BIIB","BLK","BX","BA","BSX","BMY","AVGO","BR","BRO",
+    "BG","BLDR","CHRW","CDNS","CPT","CPB","COF","CAH","KMX","CCL","CARR","CAT","CBOE","CBRE",
+    "CDW","COR","CNC","CDAY","CF","SCHW","CHTR","CVX","CMG","CB","CHD","CI","CINF","CTAS","CSCO",
+    "C","CFG","CLX","CME","CMS","KO","CTSH","CL","CMCSA","CAG","COP","ED","STZ","CEG","COO",
+    "CPRT","GLW","CTVA","CSGP","COST","CTRA","CCI","CSX","CMI","CVS","DHR","DRI","DVA","DE",
+    "DAL","DVN","DXCM","FANG","DLR","DFS","DG","DLTR","D","DPZ","DOV","DOW","DHI","DTE","DUK",
+    "DD","EMN","ETN","EBAY","ECL","EIX","EW","EA","ELV","LLY","EMR","ENPH","ETR","EOG","EQT",
+    "EFX","EQIX","EQR","ESS","EL","ETSY","ES","EXC","EXPE","EXPD","EXR","XOM","FDS","FICO",
+    "FAST","FRT","FDX","FIS","FITB","FSLR","FE","FI","FLT","FMC","F","FTNT","FTV","FOXA","FOX",
+    "BEN","FCX","GRMN","IT","GE","GEHC","GEV","GNRC","GD","GIS","GM","GPC","GILD","GPN","GS",
+    "HAL","HIG","HAS","HCA","HSIC","HSY","HES","HPE","HLT","HOLX","HD","HON","HRL","HST","HWM",
+    "HPQ","HUBB","HUM","HBAN","HII","IBM","IEX","IDXX","ITW","INCY","IR","PODD","INTC","ICE",
+    "IFF","IP","IPG","INTU","ISRG","IVZ","INVH","IQV","IRM","JKHY","J","JBL","JPM","K","KDP",
+    "KEY","KEYS","KMB","KIM","KMI","KLAC","KHC","KR","LHX","LH","LRCX","LW","LVS","LDOS","LEN",
+    "LIN","LYV","LKQ","LMT","L","LOW","LULU","LYB","MTB","MRO","MPC","MKTX","MAR","MMC","MLM",
+    "MAS","MA","MKC","MCD","MCK","MDT","MRK","META","MET","MTD","MGM","MCHP","MU","MSFT","MAA",
+    "MRNA","MOH","TAP","MDLZ","MPWR","MNST","MCO","MS","MOS","MSI","MSCI","NDAQ","NTAP","NFLX",
+    "NEM","NWSA","NWS","NEE","NKE","NI","NDSN","NSC","NTRS","NOC","NCLH","NRG","NUE","NVDA",
+    "NVR","NXPI","ORLY","OXY","ODFL","OMC","ON","OKE","ORCL","OTIS","PCAR","PKG","PLTR","PH",
+    "PAYX","PAYC","PYPL","PNR","PEP","PFE","PCG","PM","PSX","PNC","POOL","PPG","PPL","PFG","PG",
+    "PGR","PLD","PRU","PEG","PTC","PSA","PHM","PWR","QCOM","DGX","RL","RJF","RTX","O","REG",
+    "REGN","RF","RSG","RMD","RVTY","ROK","ROL","ROP","ROST","RCL","SPGI","CRM","SBAC","SLB",
+    "STX","SRE","NOW","SHW","SPG","SJM","SW","SNA","SO","SWK","SBUX","STT","STLD","STE","SYK",
+    "SMCI","SYF","SNPS","SYY","TMUS","TROW","TTWO","TPR","TRGP","TGT","TEL","TDY","TFX","TER",
+    "TSLA","TXN","TPL","TXT","TMO","TJX","TSCO","TT","TDG","TRV","TRMB","TFC","TYL","TSN","USB",
+    "UBER","UDR","UNP","UAL","UPS","URI","UNH","VLO","VTR","VRSN","VRSK","VZ","VRTX","VTRS",
+    "VICI","V","VST","VMC","WAB","WMT","DIS","WBD","WM","WAT","WEC","WFC","WELL","WST","WDC",
+    "WY","WHR","WMB","WTW","GWW","WYNN","XEL","XYL","YUM","ZBRA","ZBH","ZTS",
+    "DECK","GEV","KVUE","SOLV","VLTO","CEG","VST","GDDY","EG","AXON","ERIE",
+    "HUBB","LDOS","LW","MKL","PODD","PWR","TRMB","TTD","CRWD","PANW","SNOW",
+]
+
+_FALLBACK_NDX = [
+    "ADSK","ANSS","BKNG","CDNS","DDOG","DXCM","EBAY","ENPH","EQIX","FAST",
+    "FTNT","GEHC","GRMN","IDXX","ILMN","INCY","LRCX","LULU","MCHP","MDLZ",
+    "MNST","MRNA","MSCI","NFLX","NXPI","ODFL","ORLY","PAYX","PCAR","PYPL",
+    "REGN","ROST","SIRI","TEAM","TTD","VRSK","VRTX","WDAY","ZS","CRWD",
+    "ABNB","COIN","RBLX","DKNG","ROKU","SHOP","NET","MDB","PANW","GTLB",
 ]
 
 
 def get_sp500_tickers() -> list[str]:
-    """Fetch S&P 500 tickers from Wikipedia, with hardcoded fallback."""
+    """Return S&P 500 + NASDAQ-100 tickers (deduplicated, no ETFs)."""
+    sp500, ndx = [], []
     try:
-        return _fetch_sp500_wiki()
-    except Exception:
-        return _FALLBACK_SP500[:]
+        sp500 = _fetch_sp500_wiki()
+        print(f"[INFO] 实时 S&P500: {len(sp500)} 只")
+    except Exception as e:
+        print(f"[WARN] S&P500 实时获取失败 ({e})，使用备用列表")
+        sp500 = _FALLBACK_SP500[:]
+
+    try:
+        ndx = _fetch_nasdaq100_wiki()
+        print(f"[INFO] 实时 NASDAQ-100: {len(ndx)} 只")
+    except Exception as e:
+        print(f"[WARN] NASDAQ-100 实时获取失败 ({e})，使用备用列表")
+        ndx = _FALLBACK_NDX[:]
+
+    all_tickers = sorted(set(sp500 + ndx))
+    print(f"[INFO] NL screener 股票池: {len(all_tickers)} 只")
+    return all_tickers
 
 
 # ─── Fundamentals fetch ───────────────────────────────────────────
