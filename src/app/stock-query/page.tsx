@@ -29,8 +29,25 @@ type PageState =
 type AIState =
   | { status: "idle" }
   | { status: "loading" }
-  | { status: "done"; result: AIScoreResponse }
+  | { status: "done"; result: AIScoreResponse; fetchedAt: string }
   | { status: "error"; code?: string };
+
+function loadCachedAIScore(symbol: string): AIState {
+  try {
+    const raw = localStorage.getItem(`ai_score_${symbol}`);
+    if (!raw) return { status: "idle" };
+    const { result, fetchedAt } = JSON.parse(raw);
+    return { status: "done", result, fetchedAt };
+  } catch {
+    return { status: "idle" };
+  }
+}
+
+function saveCachedAIScore(symbol: string, result: AIScoreResponse, fetchedAt: string) {
+  try {
+    localStorage.setItem(`ai_score_${symbol}`, JSON.stringify({ result, fetchedAt }));
+  } catch { /* ignore quota errors */ }
+}
 
 function SearchParamsTrigger({ onQuery }: { onQuery: (sym: string) => void }) {
   const searchParams = useSearchParams();
@@ -47,60 +64,68 @@ export default function StockQueryPage() {
 
   const handleQuery = useCallback(async (symbol: string) => {
     setState({ status: "loading" });
-    setAIState({ status: "idle" });
+    setAIState(loadCachedAIScore(symbol));
 
     try {
       const data = await fetchStockQueryData(symbol);
       const snapshot = computeTechnicalSnapshot(data.chart);
       setState({ status: "loaded", symbol, data, snapshot });
-
-      // Non-blocking AI score fetch
-      setAIState({ status: "loading" });
-      const fd = data.summary.financialData;
-      const ks = data.summary.defaultKeyStatistics;
-      const sd = data.summary.summaryDetail;
-      const fundamentals = {
-        symbol,
-        price: data.quote.regularMarketPrice,
-        marketCap: data.quote.marketCap,
-        trailingPE: raw(sd?.trailingPE),
-        forwardPE: raw(sd?.forwardPE),
-        priceToBook: raw(ks?.priceToBook),
-        eps: raw(ks?.trailingEps),
-        pegRatio: raw(ks?.pegRatio),
-        revenueGrowth: raw(fd?.revenueGrowth),
-        earningsGrowth: raw(fd?.earningsGrowth),
-        grossMargins: raw(fd?.grossMargins),
-        profitMargins: raw(fd?.profitMargins),
-        freeCashflow: raw(fd?.freeCashflow),
-        debtToEquity: raw(fd?.debtToEquity),
-        returnOnEquity: raw(fd?.returnOnEquity),
-        beta: raw(ks?.beta),
-        analystConsensus: fd?.recommendationKey,
-        analystTargetPrice: raw(fd?.targetMeanPrice),
-        rsi14: snapshot.rsi14,
-        weekPos52: snapshot.weekPos52,
-        maTrend: snapshot.maTrend,
-      };
-
-      fetch("/api/stock-score", {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({ symbol, fundamentals }),
-      })
-        .then(async (r) => {
-          const json = await r.json();
-          if (!r.ok) {
-            setAIState({ status: "error", code: json.error });
-          } else {
-            setAIState({ status: "done", result: json as AIScoreResponse });
-          }
-        })
-        .catch(() => setAIState({ status: "error" }));
     } catch (e) {
       setState({ status: "error", message: (e as Error).message });
     }
   }, []);
+
+  const handleAIScore = useCallback(() => {
+    if (state.status !== "loaded") return;
+    const { symbol, data, snapshot } = state;
+    setAIState({ status: "loading" });
+    const fd = data.summary.financialData;
+    const ks = data.summary.defaultKeyStatistics;
+    const sd = data.summary.summaryDetail;
+    const fundamentals = {
+      symbol,
+      price: data.quote.regularMarketPrice,
+      marketCap: data.quote.marketCap,
+      trailingPE: raw(sd?.trailingPE),
+      forwardPE: raw(sd?.forwardPE),
+      priceToBook: raw(ks?.priceToBook),
+      eps: raw(ks?.trailingEps),
+      pegRatio: raw(ks?.pegRatio),
+      revenueGrowth: raw(fd?.revenueGrowth),
+      earningsGrowth: raw(fd?.earningsGrowth),
+      grossMargins: raw(fd?.grossMargins),
+      profitMargins: raw(fd?.profitMargins),
+      freeCashflow: raw(fd?.freeCashflow),
+      debtToEquity: raw(fd?.debtToEquity),
+      returnOnEquity: raw(fd?.returnOnEquity),
+      beta: raw(ks?.beta),
+      analystConsensus: fd?.recommendationKey,
+      analystTargetPrice: raw(fd?.targetMeanPrice),
+      rsi14: snapshot.rsi14,
+      weekPos52: snapshot.weekPos52,
+      maTrend: snapshot.maTrend,
+    };
+    fetch("/api/stock-score", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ symbol, fundamentals }),
+    })
+      .then(async (r) => {
+        const json = await r.json();
+        if (!r.ok) {
+          setAIState({ status: "error", code: json.error });
+        } else {
+          const result = json as AIScoreResponse;
+          const fetchedAt = new Date().toLocaleString("zh-CN", {
+            month: "numeric", day: "numeric",
+            hour: "2-digit", minute: "2-digit", hour12: false,
+          });
+          saveCachedAIScore(symbol, result, fetchedAt);
+          setAIState({ status: "done", result, fetchedAt });
+        }
+      })
+      .catch(() => setAIState({ status: "error" }));
+  }, [state]);
 
   const isLoading = state.status === "loading";
 
@@ -155,7 +180,7 @@ export default function StockQueryPage() {
           <CompanyInfo profile={state.data.profile} />
 
           <div className="grid grid-cols-1 lg:grid-cols-[5fr_7fr] gap-4">
-            <AIScore state={aiState} />
+            <AIScore state={aiState} onFetch={handleAIScore} />
             {state.data.news.length > 0 && <NewsPanel news={state.data.news} />}
           </div>
         </>

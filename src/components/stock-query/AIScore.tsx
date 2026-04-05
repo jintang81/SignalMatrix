@@ -3,15 +3,32 @@ import type { AIScoreResponse } from "@/types";
 type AIState =
   | { status: "idle" }
   | { status: "loading" }
-  | { status: "done"; result: AIScoreResponse }
+  | { status: "done"; result: AIScoreResponse; fetchedAt: string }
   | { status: "error"; code?: string };
 
 interface AIScoreProps {
   state: AIState;
+  onFetch?: () => void;
 }
 
-export default function AIScore({ state }: AIScoreProps) {
-  if (state.status === "idle") return null;
+export default function AIScore({ state, onFetch }: AIScoreProps) {
+  if (state.status === "idle") {
+    return (
+      <div className="panel p-5 flex flex-col items-start gap-3">
+        <div className="flex items-center gap-2">
+          <p className="text-[10px] tracking-[0.18em] text-gold/80">◈ AI SCORE</p>
+          <span className="tag tag-muted text-[9px]">Claude Sonnet</span>
+        </div>
+        <p className="text-xs text-muted/50">根据财务基本面与技术指标，AI 综合评分并给出操作建议</p>
+        <button
+          onClick={onFetch}
+          className="btn text-[11px] font-trading text-gold/70 border-gold/30 hover:border-gold/60 hover:text-gold"
+        >
+          ◈ 获取 AI 评分
+        </button>
+      </div>
+    );
+  }
 
   return (
     <div className="panel p-5">
@@ -74,6 +91,15 @@ export default function AIScore({ state }: AIScoreProps) {
                   <span>{f}</span>
                 </div>
               ))}
+            </div>
+            <div className="flex items-center gap-3 mt-3">
+              <span className="text-[10px] text-muted/40">评分于 {state.fetchedAt}</span>
+              <button
+                onClick={onFetch}
+                className="text-[10px] text-muted/50 hover:text-gold/70 transition-colors"
+              >
+                ↺ 重新获取
+              </button>
             </div>
           </div>
         </div>
