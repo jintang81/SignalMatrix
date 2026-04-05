@@ -39,6 +39,7 @@ from redis_client import (
     get_options_snapshot_index, get_options_daily_snapshot,
     get_divergence_snapshot_index, get_divergence_daily_snapshot,
     get_volume_snapshot_index, get_volume_daily_snapshot,
+    get_duck_snapshot_index, get_duck_daily_snapshot,
     get_top_div_result, get_top_div_status, set_top_div_result, set_top_div_status,
     get_top_vol_result, get_top_vol_status, set_top_vol_result, set_top_vol_status,
     get_ai_strategy_result, get_ai_strategy_status, set_ai_strategy_result, set_ai_strategy_status,
@@ -241,6 +242,22 @@ def get_duck():
 def get_duck_scan_status():
     """Returns current duck scan status: idle | running | done | error."""
     return get_duck_status()
+
+
+@app.get("/api/screener/duck/snapshots")
+def get_duck_snapshots(date: str | None = None):
+    """
+    Backtesting endpoint for 正鸭嘴.
+    - No params: returns index of available snapshot dates.
+    - ?date=YYYY-MM-DD: returns that day's lightweight snapshot
+      { ticker, price, pct_change, vol_ratio, ma5, ma10, ma20 }
+    """
+    if date:
+        snap = get_duck_daily_snapshot(date)
+        if snap is None:
+            raise HTTPException(status_code=404, detail=f"No duck snapshot for {date}")
+        return snap
+    return {"dates": get_duck_snapshot_index()}
 
 
 @app.post("/api/screener/duck/run", status_code=202)

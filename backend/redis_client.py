@@ -397,3 +397,21 @@ def get_volume_daily_snapshot(date_str: str) -> dict | None:
 
 def get_volume_snapshot_index() -> list:
     return _get_snapshot_index(VOL_SNAP_PREFIX)
+
+
+# ─── Duck bill daily snapshots ────────────────────────────────────
+
+DUCK_SNAP_PREFIX = "screener:duck:snapshot"
+
+
+def set_duck_daily_snapshot(date_str: str, entries: list) -> None:
+    """entries: list of { ticker, price, pct_change, vol_ratio, ma5, ma10, ma20 }"""
+    _set_snapshot(DUCK_SNAP_PREFIX, date_str, entries)
+
+
+def get_duck_daily_snapshot(date_str: str) -> dict | None:
+    return _get_snapshot(DUCK_SNAP_PREFIX, date_str)
+
+
+def get_duck_snapshot_index() -> list:
+    return _get_snapshot_index(DUCK_SNAP_PREFIX)
