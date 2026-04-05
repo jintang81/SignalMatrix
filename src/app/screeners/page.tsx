@@ -187,19 +187,7 @@ export default function ScreeerPage() {
         </p>
       </div>
 
-      {/* NL Search */}
-      <NLSearchBar onResults={setNlResult} onLoading={setNlLoading} />
-
-      {/* NL Results */}
-      {nlLoading && (
-        <div className="panel p-8 flex items-center justify-center gap-3">
-          <span className="w-4 h-4 border border-gold/60 border-t-transparent rounded-full animate-spin" />
-          <span className="text-[11px] text-muted/60 font-chinese">AI 正在解析条件并筛选…</span>
-        </div>
-      )}
-      {!nlLoading && nlResult && <NLResultsPanel result={nlResult} />}
-
-      {/* Existing screener sections */}
+      {/* Screener sections */}
       <Section
         title="BULL SIGNAL"
         titleZh="多头信号"
@@ -218,12 +206,37 @@ export default function ScreeerPage() {
         accent="#4f9cf9"
         screeners={OPTIONS_FLOW}
       />
-      <Section
-        title="AI STRATEGY"
-        titleZh="AI 综合策略"
-        accent="#c9a84c"
-        screeners={AI_STRATEGY}
-      />
+
+      {/* AI STRATEGY + NL Search */}
+      <div className="space-y-3">
+        <div className="flex items-center gap-3">
+          <div className="w-1 h-5 rounded-full" style={{ background: "#c9a84c" }} />
+          <div>
+            <span className="text-[11px] tracking-[0.18em] font-trading" style={{ color: "#c9a84c" }}>
+              AI STRATEGY
+            </span>
+            <span className="text-[10px] text-muted/40 font-chinese ml-2">AI 综合策略</span>
+          </div>
+          <div className="flex-1 h-px bg-border/40" />
+        </div>
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+          {AI_STRATEGY.map((s) => (
+            <ScreenerCard key={s.id} s={s} accent="#c9a84c" />
+          ))}
+          <NLSearchBar
+            onResults={setNlResult}
+            onLoading={setNlLoading}
+            className="sm:col-span-1 lg:col-span-3"
+          />
+        </div>
+        {nlLoading && (
+          <div className="panel p-8 flex items-center justify-center gap-3">
+            <span className="w-4 h-4 border border-gold/60 border-t-transparent rounded-full animate-spin" />
+            <span className="text-[11px] text-muted/60 font-chinese">AI 正在解析条件并筛选…</span>
+          </div>
+        )}
+        {!nlLoading && nlResult && <NLResultsPanel result={nlResult} />}
+      </div>
     </div>
   );
 }

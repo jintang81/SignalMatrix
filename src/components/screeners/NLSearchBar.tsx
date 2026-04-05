@@ -7,6 +7,7 @@ import type { NLSearchResult } from "@/types";
 interface Props {
   onResults: (result: NLSearchResult | null) => void;
   onLoading: (loading: boolean) => void;
+  className?: string;
 }
 
 const EXAMPLES = [
@@ -16,7 +17,7 @@ const EXAMPLES = [
   "半导体行业营收增长强劲",
 ];
 
-export default function NLSearchBar({ onResults, onLoading }: Props) {
+export default function NLSearchBar({ onResults, onLoading, className }: Props) {
   const [query, setQuery]       = useState("");
   const [isSearching, setIsSearching] = useState(false);
   const [error, setError]       = useState<string | null>(null);
@@ -48,7 +49,7 @@ export default function NLSearchBar({ onResults, onLoading }: Props) {
   };
 
   return (
-    <div className="panel p-4 space-y-3">
+    <div className={`panel p-3 space-y-2${className ? ` ${className}` : ""}`}>
       {/* Header */}
       <div className="flex items-center gap-2">
         <span className="text-[10px] tracking-widest text-gold/80">◈ AI 自然语言筛选</span>
@@ -65,7 +66,7 @@ export default function NLSearchBar({ onResults, onLoading }: Props) {
           onChange={(e) => setQuery(e.target.value)}
           onKeyDown={handleKeyDown}
           placeholder="描述你想找的股票，例如：找低估值高成长的科技股…"
-          className="flex-1 bg-bg-2 border border-border rounded px-3 py-2 text-[12px]
+          className="flex-1 bg-bg-2 border border-border rounded px-3 py-1.5 text-[12px]
                      text-txt placeholder:text-muted/40 outline-none
                      focus:border-gold/50 transition-colors font-chinese"
           disabled={isSearching}
@@ -85,7 +86,7 @@ export default function NLSearchBar({ onResults, onLoading }: Props) {
       </div>
 
       {/* Example chips */}
-      <div className="flex flex-wrap gap-1.5">
+      <div className="flex flex-wrap gap-1">
         {EXAMPLES.map((ex) => (
           <button
             key={ex}
