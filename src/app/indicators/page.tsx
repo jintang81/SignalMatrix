@@ -12,8 +12,8 @@ const INDICATORS = [
   },
   {
     id: "liucaishenlong",
-    name: "六彩神龙",
-    nameZh: "MCDX Smart Money",
+    name: "MCDX SMART MONEY",
+    nameZh: "六彩神龙",
     desc: "庄家/游资/散户资金追踪，RSI 多周期分层识别主力控盘与游资动向",
     tags: ["庄家能量", "游资追踪", "RSI 多周期", "资金分层"],
     href: "/indicators/liucaishenlong",
@@ -60,7 +60,7 @@ export default function IndicatorsPage() {
             <div className="flex items-center gap-2 mb-1">
               <p className="text-sm tracking-[0.12em] text-gold">{ind.name}</p>
             </div>
-            <p className="text-[11px] text-muted/60 font-chinese">{ind.nameZh}</p>
+            <p className="text-[11px] text-txt/70 font-chinese">{ind.nameZh}</p>
           </div>
           <p className="text-xs text-muted/70 leading-relaxed">{ind.desc}</p>
           <div className="flex flex-wrap gap-1.5">
@@ -86,7 +86,7 @@ export default function IndicatorsPage() {
                 <div className="flex items-center gap-2 mb-1">
                   <p className="text-sm tracking-[0.12em] text-gold">{ind.name}</p>
                 </div>
-                <p className="text-[11px] text-muted/60 font-chinese">{ind.nameZh}</p>
+                <p className="text-[11px] text-txt/70 font-chinese">{ind.nameZh}</p>
               </div>
               <p className="text-xs text-muted/70 leading-relaxed flex-1">{ind.desc}</p>
               <div className="flex flex-wrap gap-1.5">
@@ -107,7 +107,7 @@ export default function IndicatorsPage() {
                   <p className="text-sm tracking-[0.12em] text-gold">{ind.name}</p>
                   <span className="tag tag-muted text-[9px]">即将上线</span>
                 </div>
-                <p className="text-[11px] text-muted/60 font-chinese">{ind.nameZh}</p>
+                <p className="text-[11px] text-txt/70 font-chinese">{ind.nameZh}</p>
               </div>
               <p className="text-xs text-muted/70 leading-relaxed flex-1">{ind.desc}</p>
               <div className="flex flex-wrap gap-1.5">

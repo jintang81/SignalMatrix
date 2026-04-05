@@ -54,9 +54,9 @@ export default function Home() {
         <div className="flex flex-wrap gap-2">
           {[
             { name: "综合图表", href: "/indicators/composite" },
-            { name: "SUPERTREND", href: "/indicators/supertrend" },
+            { name: "枢轴点超级趋势", href: "/indicators/supertrend" },
             { name: "六彩神龙", href: "/indicators/liucaishenlong" },
-            { name: "GMMA+", href: "/indicators/gmma" },
+            { name: "顾比移动均线+", href: "/indicators/gmma" },
           ].map(({ name, href }) => (
             <Link key={name} href={href}>
               <span className="tag tag-gold cursor-pointer hover:bg-gold/20 transition-colors">{name}</span>
@@ -103,7 +103,6 @@ export default function Home() {
       <Link href="/screeners/ai-strategy" className="panel p-5 block hover:border-gold/40 hover:bg-gold/[0.02] transition-all duration-200">
         <div className="flex items-center gap-3 mb-1">
           <p className="text-sm tracking-[0.18em] text-gold">◈ AI STRATEGY</p>
-          <span className="tag tag-muted">每日更新</span>
         </div>
         <p className="text-xs text-muted/60 mb-3">
           根据 SPY / QQQ 趋势、VIX 恐慌指数、板块轮动，AI 自动推荐当前市场环境下最优的 Bull 或 Bear 筛选组合

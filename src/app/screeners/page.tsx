@@ -111,7 +111,7 @@ function ScreenerCard({ s, accent }: { s: Screener; accent: string }) {
             <div className="flex items-center gap-2 mb-0.5">
               <p className="text-[11px] tracking-[0.12em]" style={{ color: accent }}>{s.name}</p>
             </div>
-            <p className="text-[10px] text-muted/50 font-chinese">{s.nameZh}</p>
+            <p className="text-[10px] text-txt/65 font-chinese">{s.nameZh}</p>
           </div>
           <span className="text-muted/30 mt-0.5">→</span>
         </div>
@@ -126,7 +126,7 @@ function ScreenerCard({ s, accent }: { s: Screener; accent: string }) {
           <p className="text-[11px] tracking-[0.12em] text-muted">{s.name}</p>
           <span className="tag tag-muted text-[9px]">即将上线</span>
         </div>
-        <p className="text-[10px] text-muted/50 font-chinese">{s.nameZh}</p>
+        <p className="text-[10px] text-txt/65 font-chinese">{s.nameZh}</p>
       </div>
       <p className="text-[11px] text-muted/60 leading-relaxed">{s.desc}</p>
     </div>
@@ -171,7 +171,7 @@ function Section({
 
 export default function ScreeerPage() {
   return (
-    <div className="py-3 space-y-3 min-h-[calc(100dvh-3.5rem)]">
+    <div className="py-6 space-y-3 min-h-[calc(100dvh-3.5rem)]">
       {/* Header */}
       <div className="panel p-3">
         <p className="text-sm tracking-[0.18em] text-muted mb-1">SCREENERS</p>
