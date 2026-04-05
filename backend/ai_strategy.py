@@ -166,7 +166,7 @@ def run_ai_strategy() -> dict:
     spy = market_data["spy"]
     qqq = market_data["qqq"]
 
-    return {
+    result = {
         **ai_result,
         "market_metrics": {
             "spy_price":    spy.get("price", 0),
@@ -184,3 +184,8 @@ def run_ai_strategy() -> dict:
         "sectors": market_data.get("sectors", {}),
         "scan_time": now_la.strftime(f"%Y-%m-%d %H:%M:%S {tz_abbr}"),
     }
+
+    from redis_client import set_ai_strategy_daily_snapshot
+    set_ai_strategy_daily_snapshot(now_la.strftime("%Y-%m-%d"), result)
+
+    return result

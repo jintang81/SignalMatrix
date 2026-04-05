@@ -110,7 +110,6 @@ function ScreenerCard({ s, accent }: { s: Screener; accent: string }) {
           <div>
             <div className="flex items-center gap-2 mb-0.5">
               <p className="text-[11px] tracking-[0.12em]" style={{ color: accent }}>{s.name}</p>
-              <span className="tag text-[9px]" style={{ color: accent, borderColor: `color-mix(in srgb, ${accent} 40%, transparent)`, background: `color-mix(in srgb, ${accent} 8%, transparent)` }}>已上线</span>
             </div>
             <p className="text-[10px] text-muted/50 font-chinese">{s.nameZh}</p>
           </div>

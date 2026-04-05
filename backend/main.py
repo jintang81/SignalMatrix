@@ -47,6 +47,7 @@ from redis_client import (
     get_top_div_result, get_top_div_status, set_top_div_result, set_top_div_status,
     get_top_vol_result, get_top_vol_status, set_top_vol_result, set_top_vol_status,
     get_ai_strategy_result, get_ai_strategy_status, set_ai_strategy_result, set_ai_strategy_status,
+    get_ai_strategy_daily_snapshot, get_ai_strategy_snapshot_index,
     get_inverted_duck_result, get_inverted_duck_status, set_inverted_duck_result, set_inverted_duck_status,
     get_inverted_duck_snapshot_index, get_inverted_duck_daily_snapshot,
 )
@@ -472,6 +473,21 @@ async def trigger_ai_strategy(
     set_ai_strategy_status("running")
     background_tasks.add_task(_run_ai_strategy_task)
     return {"message": "AI strategy generation started"}
+
+
+@app.get("/api/strategy/snapshots")
+def get_ai_strategy_snapshots(date: str | None = None):
+    """
+    Returns AI strategy snapshot index or a specific day's result.
+    No date → {"dates": ["YYYY-MM-DD", ...]}
+    With ?date=YYYY-MM-DD → full strategy result dict for that day
+    """
+    if date:
+        snap = get_ai_strategy_daily_snapshot(date)
+        if snap is None:
+            raise HTTPException(status_code=404, detail="Snapshot not found")
+        return snap
+    return {"dates": get_ai_strategy_snapshot_index()}
 
 
 # ─── Inverted Duck Bill Endpoints ────────────────────────────────

@@ -467,3 +467,33 @@ def get_inverted_duck_daily_snapshot(date_str: str) -> dict | None:
 
 def get_inverted_duck_snapshot_index() -> list:
     return _get_snapshot_index(INVERTED_DUCK_SNAP_PREFIX)
+
+
+# ─── AI Strategy daily snapshots ─────────────────────────────────
+
+AI_STRATEGY_SNAP_PREFIX = "screener:ai-strategy:snapshot"
+
+
+def set_ai_strategy_daily_snapshot(date_str: str, result: dict) -> None:
+    """Store the full AI strategy result as a daily snapshot."""
+    r = _get_redis()
+    key       = f"{AI_STRATEGY_SNAP_PREFIX}:{date_str}"
+    index_key = f"{AI_STRATEGY_SNAP_PREFIX}:index"
+    r.setex(key, SNAPSHOT_TTL, json.dumps(result, ensure_ascii=False))
+    raw = r.get(index_key)
+    dates: list = json.loads(raw) if isinstance(raw, str) and raw else []
+    if date_str not in dates:
+        dates.append(date_str)
+        dates.sort()
+    r.setex(index_key, SNAPSHOT_INDEX_TTL, json.dumps(dates))
+
+
+def get_ai_strategy_daily_snapshot(date_str: str) -> dict | None:
+    raw = _get_redis().get(f"{AI_STRATEGY_SNAP_PREFIX}:{date_str}")
+    if raw is None:
+        return None
+    return json.loads(raw) if isinstance(raw, str) else raw
+
+
+def get_ai_strategy_snapshot_index() -> list:
+    return _get_snapshot_index(AI_STRATEGY_SNAP_PREFIX)

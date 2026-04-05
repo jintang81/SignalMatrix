@@ -87,16 +87,20 @@ export default function Home() {
         <p className="text-sm tracking-[0.18em] text-bear mb-1">● BEAR SIGNAL</p>
         <p className="text-xs text-muted/60 mb-3">检测空头信号，识别潜在下行风险</p>
         <div className="flex flex-wrap gap-2">
-          {["顶背离", "顶部放量", "倒鸭嘴"].map((name) => (
-            <span key={name} className="tag tag-dn">
-              {name}
-            </span>
+          {[
+            { name: "顶背离",   href: "/screeners/top-divergence" },
+            { name: "顶部放量", href: "/screeners/top-volume-surge" },
+            { name: "倒鸭嘴",   href: "/screeners/inverted-duck-bill" },
+          ].map(({ name, href }) => (
+            <Link key={name} href={href}>
+              <span className="tag tag-dn cursor-pointer hover:bg-bear/20 transition-colors">{name}</span>
+            </Link>
           ))}
         </div>
       </section>
 
       {/* AI Strategy */}
-      <section className="panel p-5">
+      <Link href="/screeners/ai-strategy" className="panel p-5 block hover:border-gold/40 hover:bg-gold/[0.02] transition-all duration-200">
         <div className="flex items-center gap-3 mb-1">
           <p className="text-sm tracking-[0.18em] text-gold">◈ AI STRATEGY</p>
           <span className="tag tag-muted">每日更新</span>
@@ -112,7 +116,7 @@ export default function Home() {
           ))}
           <span className="tag tag-muted">Claude API (Anthropic)</span>
         </div>
-      </section>
+      </Link>
     </div>
   );
 }
