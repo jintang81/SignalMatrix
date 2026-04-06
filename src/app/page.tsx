@@ -100,22 +100,23 @@ export default function Home() {
       </section>
 
       {/* AI Strategy */}
-      <Link href="/screeners/ai-strategy" className="panel p-5 block hover:border-gold/40 hover:bg-gold/[0.02] transition-all duration-200">
-        <div className="flex items-center gap-3 mb-1">
-          <p className="text-sm tracking-[0.18em] text-gold">◈ AI STRATEGY</p>
-        </div>
+      <section className="panel p-5">
+        <p className="text-sm tracking-[0.18em] text-gold mb-1">◈ AI STRATEGY</p>
         <p className="text-xs text-muted/60 mb-3">
-          根据 SPY / QQQ 趋势、VIX 恐慌指数、板块轮动，AI 自动推荐当前市场环境下最优的 Bull 或 Bear 筛选组合
+          根据 SPY / QQQ 趋势、VIX 恐慌指数、板块轮动，AI 自动推荐筛选组合；支持自然语言筛选美股
         </p>
         <div className="flex flex-wrap gap-2">
-          {["市场环境感知", "策略推荐", "推荐理由"].map((name) => (
-            <span key={name} className="tag tag-gold">
-              {name}
-            </span>
+          {[
+            { name: "AI 综合策略", href: "/screeners/ai-strategy" },
+            { name: "AI 自然语言筛选", href: "/screeners" },
+          ].map(({ name, href }) => (
+            <Link key={name} href={href}>
+              <span className="tag tag-gold cursor-pointer hover:bg-gold/20 transition-colors">{name}</span>
+            </Link>
           ))}
           <span className="tag tag-muted">Claude API (Anthropic)</span>
         </div>
-      </Link>
+      </section>
     </div>
   );
 }

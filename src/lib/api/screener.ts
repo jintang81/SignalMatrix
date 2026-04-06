@@ -50,6 +50,7 @@ export type ScanStatus = {
 export async function fetchDivergenceScreener(): Promise<DivergenceScreenerResult> {
   if (BACKEND_URL) {
     const res = await fetch(`${BACKEND_URL}/api/screener/divergence`);
+    if (res.status === 404) return MOCK_DIVERGENCE_DATA;
     if (!res.ok) throw new Error(`Screener API error: ${res.status}`);
     return res.json();
   }

@@ -1,31 +1,59 @@
 """
 SignalMatrix FastAPI Backend
 
-Endpoints:
-  GET  /api/screener/divergence       — return cached bottom-divergence scan results
-  GET  /api/screener/status           — check divergence scan status
-  POST /api/screener/run              — trigger a divergence scan (requires X-API-Key header)
+Bull Signal screeners:
+  GET  /api/screener/divergence            — 底背离 cached results
+  GET  /api/screener/status               — 底背离 scan status
+  POST /api/screener/run                  — trigger 底背离 scan (X-API-Key required)
+  GET  /api/screener/snapshots[?date=]    — 底背离 backtesting snapshots
 
-  GET  /api/screener/volume           — return cached bottom-volume-surge scan results
-  GET  /api/screener/volume/status    — check volume scan status
-  POST /api/screener/volume/run       — trigger a volume scan (requires X-API-Key header)
+  GET  /api/screener/volume               — 底部放量 cached results
+  GET  /api/screener/volume/status        — 底部放量 scan status
+  POST /api/screener/volume/run           — trigger 底部放量 scan
+  GET  /api/screener/volume/snapshots     — 底部放量 backtesting snapshots
 
-  GET  /api/screener/duck             — return cached duck-bill scan results
-  GET  /api/screener/duck/status      — check duck scan status
-  POST /api/screener/duck/run         — trigger a duck scan (requires X-API-Key header)
+  GET  /api/screener/duck                 — 正鸭嘴 cached results
+  GET  /api/screener/duck/status          — 正鸭嘴 scan status
+  POST /api/screener/duck/run             — trigger 正鸭嘴 scan
+  GET  /api/screener/duck/snapshots       — 正鸭嘴 backtesting snapshots
 
-  GET  /api/screener/inverted-duck             — return cached inverted-duck-bill scan results
-  GET  /api/screener/inverted-duck/status      — check inverted-duck scan status
-  POST /api/screener/inverted-duck/run         — trigger an inverted-duck scan (requires X-API-Key header)
+Bear Signal screeners:
+  GET  /api/screener/top-divergence       — 顶背离 cached results
+  GET  /api/screener/top-divergence/status
+  POST /api/screener/top-divergence/run
 
-  GET  /api/screener/options          — return cached unusual-options scan results
-  GET  /api/screener/options/status   — check options scan status
-  POST /api/screener/options/run      — trigger an options scan (requires X-API-Key header)
+  GET  /api/screener/top-volume           — 顶部放量 cached results
+  GET  /api/screener/top-volume/status
+  POST /api/screener/top-volume/run
+
+  GET  /api/screener/inverted-duck        — 倒鸭嘴 cached results
+  GET  /api/screener/inverted-duck/status
+  POST /api/screener/inverted-duck/run
+  GET  /api/screener/inverted-duck/snapshots
+
+Options Flow:
+  GET  /api/screener/options              — 异常期权信号 cached results
+  GET  /api/screener/options/status
+  POST /api/screener/options/run
+  GET  /api/screener/options/snapshots
+
+AI Strategy:
+  GET  /api/strategy                      — AI 综合策略 cached result
+  GET  /api/strategy/status
+  POST /api/strategy/run
+  GET  /api/strategy/snapshots[?date=]
+
+NL Screener:
+  POST /api/screener/nl                              — AI 自然语言筛选
+  POST /api/screener/nl/refresh-fundamentals         — refresh fundamentals cache
+  GET  /api/screener/nl/fundamentals-status          — cache metadata
 
 Required env vars:
-  API_KEY                  — protects the /run endpoints
+  API_KEY                  — protects all /run and /nl endpoints
   UPSTASH_REDIS_REST_URL   — from Upstash console
   UPSTASH_REDIS_REST_TOKEN — from Upstash console
+  ANTHROPIC_API_KEY        — for AI strategy + NL screener
+  TRADIER_TOKEN            — for unusual options scan
 """
 
 import asyncio
@@ -73,15 +101,6 @@ def _reset_stale_running_statuses():
     On startup, reset any 'running' statuses left over from a previous process.
     This prevents the frontend from polling forever after a Render restart/redeploy.
     """
-    from redis_client import (
-        get_status, set_status,
-        get_volume_status, set_volume_status,
-        get_duck_status, set_duck_status,
-        get_options_status, set_options_status,
-        get_top_div_status, set_top_div_status,
-        get_top_vol_status, set_top_vol_status,
-        get_ai_strategy_status, set_ai_strategy_status,
-    )
     for get_fn, set_fn in [
         (get_status,           set_status),
         (get_volume_status,    set_volume_status),
