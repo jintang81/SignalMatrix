@@ -2,6 +2,7 @@ import type { Metadata, Viewport } from "next";
 import { Share_Tech_Mono, Noto_Serif_SC } from "next/font/google";
 import "./globals.css";
 import Navbar from "@/components/layout/Navbar";
+import ScrollToTop from "@/components/layout/ScrollToTop";
 
 const shareTechMono = Share_Tech_Mono({
   weight: "400",
@@ -51,6 +52,7 @@ export default function RootLayout({
       className={`${shareTechMono.variable} ${notoSerifSC.variable}`}
     >
       <body>
+        <ScrollToTop />
         <Navbar />
         <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           {children}
