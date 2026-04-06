@@ -5,6 +5,8 @@ import { useRouter } from "next/navigation";
 
 interface Props {
   className?: string;
+  initialQuery?: string;
+  onSearch?: (query: string) => void;
 }
 
 const EXAMPLES = [
@@ -14,15 +16,19 @@ const EXAMPLES = [
   "半导体行业营收增长强劲",
 ];
 
-export default function NLSearchBar({ className }: Props) {
-  const [query, setQuery] = useState("");
+export default function NLSearchBar({ className, initialQuery = "", onSearch }: Props) {
+  const [query, setQuery] = useState(initialQuery);
   const inputRef = useRef<HTMLInputElement>(null);
   const router = useRouter();
 
   const handleSearch = () => {
     const q = query.trim();
     if (!q) return;
-    router.push(`/screeners/nl-results?q=${encodeURIComponent(q)}`);
+    if (onSearch) {
+      onSearch(q);
+    } else {
+      router.push(`/screeners/nl-results?q=${encodeURIComponent(q)}`);
+    }
   };
 
   const handleKeyDown = (e: React.KeyboardEvent) => {

@@ -108,7 +108,7 @@ export default function Home() {
         <div className="flex flex-wrap gap-2">
           {[
             { name: "AI 综合策略", href: "/screeners/ai-strategy" },
-            { name: "AI 自然语言筛选", href: "/screeners" },
+            { name: "AI 自然语言筛选", href: "/screeners/nl-results" },
           ].map(({ name, href }) => (
             <Link key={name} href={href}>
               <span className="tag tag-gold cursor-pointer hover:bg-gold/20 transition-colors">{name}</span>

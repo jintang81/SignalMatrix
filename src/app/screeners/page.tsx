@@ -1,7 +1,6 @@
 "use client";
 
 import Link from "next/link";
-import NLSearchBar from "@/components/screeners/NLSearchBar";
 
 // ─── Data ─────────────────────────────────────────────────────────
 
@@ -95,6 +94,15 @@ const AI_STRATEGY: Screener[] = [
     desc: "Claude AI 实时分析 SPY/QQQ/VIX 与板块数据，生成市场环境判断、推荐筛选器组合与详细操盘策略简报。",
     tags: ["Claude claude-opus-4-6", "市场环境", "筛选器推荐", "按需生成"],
     href: "/screeners/ai-strategy",
+    available: true,
+  },
+  {
+    id: "nl-screener",
+    name: "NL SCREENER",
+    nameZh: "AI 自然语言筛选",
+    desc: "用自然语言描述目标股票，Claude Haiku 解析条件并从 S&P 500 + NASDAQ-100 基本面快照中匹配，返回最多 25 只。",
+    tags: ["Claude Haiku", "基本面筛选", "自然语言"],
+    href: "/screeners/nl-results",
     available: true,
   },
 ];
@@ -201,25 +209,12 @@ export default function ScreeerPage() {
         screeners={OPTIONS_FLOW}
       />
 
-      {/* AI STRATEGY + NL Search */}
-      <div className="space-y-3">
-        <div className="flex items-center gap-3">
-          <div className="w-1 h-5 rounded-full" style={{ background: "#c9a84c" }} />
-          <div>
-            <span className="text-[11px] tracking-[0.18em] font-trading" style={{ color: "#c9a84c" }}>
-              AI STRATEGY
-            </span>
-            <span className="text-[10px] text-muted/40 font-chinese ml-2">AI 综合策略</span>
-          </div>
-          <div className="flex-1 h-px bg-border/40" />
-        </div>
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
-          {AI_STRATEGY.map((s) => (
-            <ScreenerCard key={s.id} s={s} accent="#c9a84c" />
-          ))}
-          <NLSearchBar className="sm:col-span-1 lg:col-span-3" />
-        </div>
-      </div>
+      <Section
+        title="AI STRATEGY"
+        titleZh="AI 综合策略"
+        accent="#c9a84c"
+        screeners={AI_STRATEGY}
+      />
     </div>
   );
 }
