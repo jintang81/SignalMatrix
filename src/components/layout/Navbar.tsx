@@ -35,13 +35,14 @@ export default function Navbar() {
   return (
     <div ref={menuRef} className="sticky top-0 z-50">
       <nav
-        className="h-14"
         style={{
           background: "linear-gradient(180deg, #0f1826 0%, #0c1018 100%)",
           borderBottom: "1px solid #2e3a50",
+          paddingTop: "env(safe-area-inset-top)",
+          height: "calc(3.5rem + env(safe-area-inset-top))",
         }}
       >
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-full flex items-center gap-6">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 flex items-center gap-6" style={{ height: "3.5rem" }}>
           {/* ── Logo ── */}
           <Link
             href="/"
