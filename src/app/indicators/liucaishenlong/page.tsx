@@ -82,7 +82,7 @@ export default function LiucaishenglongPage() {
   const isLoading = state.status === "loading";
 
   return (
-    <div className="py-3 space-y-3">
+    <div className="py-6 space-y-3">
       {/* Header */}
       <div className="panel p-3">
         <div className="flex items-center gap-3 mb-1">

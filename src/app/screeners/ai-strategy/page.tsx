@@ -189,7 +189,7 @@ export default function AIStrategyPage() {
   // ── Loading skeleton ──────────────────────────────────────────
   if (state.phase === "loading") {
     return (
-      <div className="py-3 space-y-3 min-h-[calc(100dvh-3.5rem)] animate-pulse">
+      <div className="py-6 space-y-3 min-h-[calc(100dvh-3.5rem)] animate-pulse">
         <div className="panel h-28" />
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
           {[0,1,2,3].map(i => <div key={i} className="panel h-16" />)}
@@ -203,7 +203,7 @@ export default function AIStrategyPage() {
   // ── Generating state ──────────────────────────────────────────
   if (state.phase === "generating") {
     return (
-      <div className="py-3 min-h-[calc(100dvh-3.5rem)] flex flex-col items-center justify-center gap-6">
+      <div className="py-6 min-h-[calc(100dvh-3.5rem)] flex flex-col items-center justify-center gap-6">
         <div className="text-center space-y-3">
           <div className="flex items-center justify-center gap-2 mb-2">
             <span className="text-gold text-[11px] tracking-widest">◈ AI STRATEGY</span>
@@ -234,7 +234,7 @@ export default function AIStrategyPage() {
   // ── Idle state (no cached result) ─────────────────────────────
   if (state.phase === "idle" || state.phase === "error") {
     return (
-      <div className="py-3 min-h-[calc(100dvh-3.5rem)] flex flex-col items-center justify-center gap-6">
+      <div className="py-6 min-h-[calc(100dvh-3.5rem)] flex flex-col items-center justify-center gap-6">
         <div className="text-center space-y-3 max-w-sm">
           <p className="text-[11px] tracking-widest text-gold">◈ AI STRATEGY</p>
           <p className="text-xs text-muted/60 font-chinese">
@@ -262,7 +262,7 @@ export default function AIStrategyPage() {
   const fmtPx  = (v: number) => `$${v.toFixed(2)}`;
 
   return (
-    <div className="py-3 space-y-3 min-h-[calc(100dvh-3.5rem)]">
+    <div className="py-6 space-y-3 min-h-[calc(100dvh-3.5rem)]">
 
       {/* ── Environment Banner ───────────────────────────────── */}
       <div

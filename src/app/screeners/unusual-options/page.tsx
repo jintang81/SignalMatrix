@@ -208,7 +208,7 @@ export default function UnusualOptionsPage() {
     status.status === "error"   ? "text-dn"    : "text-muted/40";
 
   return (
-    <div className="py-4 space-y-3 min-h-[calc(100dvh-3.5rem)]">
+    <div className="py-6 space-y-3 min-h-[calc(100dvh-3.5rem)]">
       {/* ── Page header ── */}
       <div className="panel p-4 flex items-start justify-between gap-4">
         <div>
