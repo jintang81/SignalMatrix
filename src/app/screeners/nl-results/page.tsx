@@ -40,7 +40,7 @@ function NLResultsContent() {
   };
 
   return (
-    <div className="py-6 space-y-3 min-h-[calc(100dvh-3.5rem)]">
+    <div className="py-3 space-y-3 min-h-[calc(100dvh-3.5rem)]">
       {/* Header */}
       <div className="panel p-3 flex items-center gap-3">
         <Link
