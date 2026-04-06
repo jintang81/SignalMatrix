@@ -45,7 +45,7 @@ export default function NLSearchBar({ className, initialQuery = "", onSearch }: 
       </div>
 
       {/* Input row */}
-      <div className="flex gap-2">
+      <div className="flex flex-col sm:flex-row gap-2">
         <input
           ref={inputRef}
           type="text"
@@ -53,7 +53,7 @@ export default function NLSearchBar({ className, initialQuery = "", onSearch }: 
           onChange={(e) => setQuery(e.target.value)}
           onKeyDown={handleKeyDown}
           placeholder="描述你想找的股票，例如：找低估值高成长的科技股…"
-          className="flex-1 bg-bg-2 border border-border rounded px-3 py-1.5 text-[12px]
+          className="flex-1 min-w-0 bg-bg-2 border border-border rounded px-3 py-1.5 text-[12px]
                      text-txt placeholder:text-muted/40 outline-none
                      focus:border-gold/50 transition-colors font-chinese"
         />
