@@ -444,8 +444,8 @@ export default function CompositeChart({ data, overlays, params, interval }: Pro
 
     // ─── Event listeners ──────────────────────────────────────────
     const drag = { active: false, startX: 0, startS: 0, startE: 0 };
-    const pointers = new Map<number, number>();
-    let pinch: { startDist: number; startVis: number; startS: number; midFrac: number } | null = null;
+    let isPinching = false;
+    let touchPinch: { startDist: number; startVis: number; startS: number; midFrac: number } | null = null;
 
     const onWheel = (e: WheelEvent) => {
       e.preventDefault();
@@ -464,23 +464,18 @@ export default function CompositeChart({ data, overlays, params, interval }: Pro
       draw();
     };
 
-    const onPointerDown = (e: PointerEvent) => {
-      pointers.set(e.pointerId, e.clientX);
-      canvas!.setPointerCapture(e.pointerId);
-      if (pointers.size === 1) {
-        drag.active = true;
-        drag.startX = e.clientX;
-        drag.startS = view.start;
-        drag.startE = view.end;
-      } else if (pointers.size === 2) {
+    const onTouchStart = (e: TouchEvent) => {
+      if (e.touches.length === 2) {
+        isPinching = true;
         drag.active = false;
-        const xs = Array.from(pointers.values());
-        const dist = Math.abs(xs[1] - xs[0]);
-        const midX = (xs[0] + xs[1]) / 2;
+        e.preventDefault();
+        const t0 = e.touches[0], t1 = e.touches[1];
+        const dist = Math.abs(t0.clientX - t1.clientX);
+        const midX = (t0.clientX + t1.clientX) / 2;
         const W = getW();
         const chartW = W - PAD.left - PAD.right;
         const rect = canvas!.getBoundingClientRect();
-        pinch = {
+        touchPinch = {
           startDist: Math.max(dist, 1),
           startVis: view.end - view.start,
           startS: view.start,
@@ -489,21 +484,37 @@ export default function CompositeChart({ data, overlays, params, interval }: Pro
       }
     };
 
-    const onPointerMove = (e: PointerEvent) => {
-      pointers.set(e.pointerId, e.clientX);
-      if (pointers.size >= 2 && pinch) {
-        const xs = Array.from(pointers.values());
-        const newDist = Math.max(Math.abs(xs[1] - xs[0]), 1);
-        const scale = pinch.startDist / newDist;
-        const newVis = Math.max(10, Math.min(n, pinch.startVis * scale));
-        const anchor = pinch.startS + pinch.midFrac * pinch.startVis;
-        view.start = Math.max(0, anchor - pinch.midFrac * newVis);
+    const onTouchMove = (e: TouchEvent) => {
+      if (e.touches.length === 2 && touchPinch) {
+        e.preventDefault();
+        const t0 = e.touches[0], t1 = e.touches[1];
+        const newDist = Math.max(Math.abs(t0.clientX - t1.clientX), 1);
+        const scale = touchPinch.startDist / newDist;
+        const newVis = Math.max(10, Math.min(n, touchPinch.startVis * scale));
+        const anchor = touchPinch.startS + touchPinch.midFrac * touchPinch.startVis;
+        view.start = Math.max(0, anchor - touchPinch.midFrac * newVis);
         view.end = Math.min(n, view.start + newVis);
         if (view.end > n) { view.end = n; view.start = Math.max(0, n - newVis); }
         tooltipEl!.style.display = "none";
         draw();
-        return;
       }
+    };
+
+    const onTouchEnd = (e: TouchEvent) => {
+      if (e.touches.length < 2) { touchPinch = null; isPinching = false; }
+    };
+
+    const onPointerDown = (e: PointerEvent) => {
+      if (isPinching) return;
+      canvas!.setPointerCapture(e.pointerId);
+      drag.active = true;
+      drag.startX = e.clientX;
+      drag.startS = view.start;
+      drag.startE = view.end;
+    };
+
+    const onPointerMove = (e: PointerEvent) => {
+      if (isPinching) { tooltipEl!.style.display = "none"; return; }
       const W = getW();
       const chartW = W - PAD.left - PAD.right;
       const rect = canvas!.getBoundingClientRect();
@@ -574,25 +585,17 @@ export default function CompositeChart({ data, overlays, params, interval }: Pro
       tooltipEl!.style.top  = Math.max(e.clientY - 10, 0) + "px";
     };
 
-    const onPointerUp = (e: PointerEvent) => {
-      pointers.delete(e.pointerId);
-      if (pointers.size < 2) pinch = null;
-      if (pointers.size === 0) {
-        drag.active = false;
-      } else if (pointers.size === 1) {
-        const [lastX] = Array.from(pointers.values());
-        drag.active = true;
-        drag.startX = lastX;
-        drag.startS = view.start;
-        drag.startE = view.end;
-      }
-    };
+    const onPointerUp = () => { drag.active = false; };
     const onLeave = () => { tooltipEl!.style.display = "none"; draw(); };
 
     const ro = new ResizeObserver(draw);
     ro.observe(canvas.parentElement!);
 
     canvas.addEventListener("wheel", onWheel, { passive: false });
+    canvas.addEventListener("touchstart", onTouchStart, { passive: false });
+    canvas.addEventListener("touchmove", onTouchMove, { passive: false });
+    canvas.addEventListener("touchend", onTouchEnd);
+    canvas.addEventListener("touchcancel", onTouchEnd);
     canvas.addEventListener("pointerdown", onPointerDown);
     canvas.addEventListener("pointermove", onPointerMove);
     canvas.addEventListener("pointerup", onPointerUp);
@@ -603,6 +606,10 @@ export default function CompositeChart({ data, overlays, params, interval }: Pro
     return () => {
       ro.disconnect();
       canvas.removeEventListener("wheel", onWheel);
+      canvas.removeEventListener("touchstart", onTouchStart);
+      canvas.removeEventListener("touchmove", onTouchMove);
+      canvas.removeEventListener("touchend", onTouchEnd);
+      canvas.removeEventListener("touchcancel", onTouchEnd);
       canvas.removeEventListener("pointerdown", onPointerDown);
       canvas.removeEventListener("pointermove", onPointerMove);
       canvas.removeEventListener("pointerup", onPointerUp);

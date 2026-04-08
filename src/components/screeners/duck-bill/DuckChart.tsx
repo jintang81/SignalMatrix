@@ -49,8 +49,7 @@ export default function DuckChart({ chart }: Props) {
   const canvasRef    = useRef<HTMLCanvasElement>(null);
   const viewRef      = useRef({ start: 0, end: 0 });   // visible bar range [start, end)
   const dragRef      = useRef<{ x: number; start: number } | null>(null);
-  const pointersRef  = useRef(new Map<number, number>());
-  const pinchRef     = useRef<{ startDist: number; startVis: number; startS: number; midFrac: number } | null>(null);
+  const isPinchingRef = useRef(false);
 
   const n = chart.dates.length;
   const ma5Series  = calcMA(chart.close, 5);
@@ -308,46 +307,70 @@ export default function DuckChart({ chart }: Props) {
     return () => canvas.removeEventListener("wheel", onWheel);
   }, [draw, n]);
 
-  // ── Pointer drag ─────────────────────────────────────────────
-  const onPointerDown = useCallback((e: React.PointerEvent) => {
+  // ── Touch pinch ───────────────────────────────────────────────
+  useEffect(() => {
     const canvas = canvasRef.current;
     if (!canvas) return;
-    pointersRef.current.set(e.pointerId, e.clientX);
+    let touchPinch: { startDist: number; startVis: number; startS: number; midFrac: number } | null = null;
+
+    const onTouchStart = (e: TouchEvent) => {
+      if (e.touches.length === 2) {
+        isPinchingRef.current = true;
+        dragRef.current = null;
+        e.preventDefault();
+        const t0 = e.touches[0], t1 = e.touches[1];
+        const dist = Math.abs(t0.clientX - t1.clientX);
+        const midX = (t0.clientX + t1.clientX) / 2;
+        const rect = canvas.getBoundingClientRect();
+        touchPinch = {
+          startDist: Math.max(dist, 1),
+          startVis: viewRef.current.end - viewRef.current.start,
+          startS: viewRef.current.start,
+          midFrac: Math.max(0, Math.min(1, (midX - rect.left) / rect.width)),
+        };
+      }
+    };
+    const onTouchMove = (e: TouchEvent) => {
+      if (e.touches.length === 2 && touchPinch) {
+        e.preventDefault();
+        const t0 = e.touches[0], t1 = e.touches[1];
+        const newDist = Math.max(Math.abs(t0.clientX - t1.clientX), 1);
+        const scale = touchPinch.startDist / newDist;
+        const newVis = Math.max(10, Math.min(n, touchPinch.startVis * scale));
+        const anchor = touchPinch.startS + touchPinch.midFrac * touchPinch.startVis;
+        let newStart = Math.round(anchor - touchPinch.midFrac * newVis);
+        let newEnd   = newStart + Math.round(newVis);
+        if (newStart < 0) { newStart = 0; newEnd = Math.round(newVis); }
+        if (newEnd > n)   { newEnd = n; newStart = n - Math.round(newVis); }
+        viewRef.current = { start: Math.max(0, newStart), end: Math.min(n, newEnd) };
+        draw();
+      }
+    };
+    const onTouchEnd = (e: TouchEvent) => {
+      if (e.touches.length < 2) { touchPinch = null; isPinchingRef.current = false; }
+    };
+
+    canvas.addEventListener("touchstart", onTouchStart, { passive: false });
+    canvas.addEventListener("touchmove", onTouchMove, { passive: false });
+    canvas.addEventListener("touchend", onTouchEnd);
+    canvas.addEventListener("touchcancel", onTouchEnd);
+    return () => {
+      canvas.removeEventListener("touchstart", onTouchStart);
+      canvas.removeEventListener("touchmove", onTouchMove);
+      canvas.removeEventListener("touchend", onTouchEnd);
+      canvas.removeEventListener("touchcancel", onTouchEnd);
+    };
+  }, [draw, n]);
+
+  // ── Pointer drag ─────────────────────────────────────────────
+  const onPointerDown = useCallback((e: React.PointerEvent) => {
+    if (isPinchingRef.current) return;
     (e.target as HTMLElement).setPointerCapture(e.pointerId);
-    if (pointersRef.current.size === 1) {
-      dragRef.current = { x: e.clientX, start: viewRef.current.start };
-    } else if (pointersRef.current.size === 2) {
-      dragRef.current = null;
-      const xs = Array.from(pointersRef.current.values());
-      const dist = Math.abs(xs[1] - xs[0]);
-      const midX = (xs[0] + xs[1]) / 2;
-      const rect = canvas.getBoundingClientRect();
-      pinchRef.current = {
-        startDist: Math.max(dist, 1),
-        startVis: viewRef.current.end - viewRef.current.start,
-        startS: viewRef.current.start,
-        midFrac: Math.max(0, Math.min(1, (midX - rect.left) / rect.width)),
-      };
-    }
+    dragRef.current = { x: e.clientX, start: viewRef.current.start };
   }, []);
 
   const onPointerMove = useCallback((e: React.PointerEvent) => {
-    pointersRef.current.set(e.pointerId, e.clientX);
-    if (pointersRef.current.size >= 2 && pinchRef.current) {
-      const xs = Array.from(pointersRef.current.values());
-      const newDist = Math.max(Math.abs(xs[1] - xs[0]), 1);
-      const scale = pinchRef.current.startDist / newDist;
-      const newVis = Math.max(10, Math.min(n, pinchRef.current.startVis * scale));
-      const anchor = pinchRef.current.startS + pinchRef.current.midFrac * pinchRef.current.startVis;
-      let newStart = Math.round(anchor - pinchRef.current.midFrac * newVis);
-      let newEnd   = newStart + Math.round(newVis);
-      if (newStart < 0) { newStart = 0; newEnd = Math.round(newVis); }
-      if (newEnd > n)   { newEnd = n; newStart = n - Math.round(newVis); }
-      viewRef.current = { start: Math.max(0, newStart), end: Math.min(n, newEnd) };
-      draw();
-      return;
-    }
-    if (!dragRef.current) return;
+    if (isPinchingRef.current || !dragRef.current) return;
     const canvas = canvasRef.current;
     if (!canvas) return;
     const { start, end } = viewRef.current;
@@ -363,15 +386,8 @@ export default function DuckChart({ chart }: Props) {
     draw();
   }, [draw, n]);
 
-  const onPointerUp = useCallback((e: React.PointerEvent) => {
-    pointersRef.current.delete(e.pointerId);
-    if (pointersRef.current.size < 2) pinchRef.current = null;
-    if (pointersRef.current.size === 0) {
-      dragRef.current = null;
-    } else if (pointersRef.current.size === 1) {
-      const [lastX] = Array.from(pointersRef.current.values());
-      dragRef.current = { x: lastX, start: viewRef.current.start };
-    }
+  const onPointerUp = useCallback(() => {
+    dragRef.current = null;
   }, []);
 
   const totalH = CANDLE_H + GAP + MACD_H;
@@ -380,7 +396,7 @@ export default function DuckChart({ chart }: Props) {
     <div ref={containerRef} className="w-full" style={{ height: totalH }}>
       <canvas
         ref={canvasRef}
-        style={{ display: "block", width: "100%", height: totalH, cursor: "crosshair" }}
+        style={{ display: "block", width: "100%", height: totalH, cursor: "crosshair", touchAction: "none" }}
         onPointerDown={onPointerDown}
         onPointerMove={onPointerMove}
         onPointerUp={onPointerUp}
