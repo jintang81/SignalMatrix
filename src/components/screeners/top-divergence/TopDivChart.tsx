@@ -256,18 +256,50 @@ export default function TopDivChart({ chart, macdDetail, rsiDetail }: Props) {
       draw();
     };
 
-    // ─── Drag pan ─────────────────────────────────────────────────
+    // ─── Drag + pinch ─────────────────────────────────────────────
     const drag = { active: false, startX: 0, startS: 0, startE: 0 };
+    const pointers = new Map<number, number>();
+    let pinch: { startDist: number; startVis: number; startS: number; midFrac: number } | null = null;
 
     const onPointerDown = (e: PointerEvent) => {
-      drag.active = true;
-      drag.startX = e.clientX;
-      drag.startS = viewRef.current.start;
-      drag.startE = viewRef.current.end;
+      pointers.set(e.pointerId, e.clientX);
       canvas!.setPointerCapture(e.pointerId);
+      if (pointers.size === 1) {
+        drag.active = true;
+        drag.startX = e.clientX;
+        drag.startS = viewRef.current.start;
+        drag.startE = viewRef.current.end;
+      } else if (pointers.size === 2) {
+        drag.active = false;
+        const xs = Array.from(pointers.values());
+        const dist = Math.abs(xs[1] - xs[0]);
+        const midX = (xs[0] + xs[1]) / 2;
+        const W = Math.max(canvas!.parentElement!.clientWidth || 400, 200);
+        const chartW = W - PAD.left - PAD.right;
+        const rect = canvas!.getBoundingClientRect();
+        pinch = {
+          startDist: Math.max(dist, 1),
+          startVis: viewRef.current.end - viewRef.current.start,
+          startS: viewRef.current.start,
+          midFrac: Math.max(0, Math.min(1, (midX - rect.left - PAD.left) / chartW)),
+        };
+      }
     };
 
     const onPointerMove = (e: PointerEvent) => {
+      pointers.set(e.pointerId, e.clientX);
+      if (pointers.size >= 2 && pinch) {
+        const xs = Array.from(pointers.values());
+        const newDist = Math.max(Math.abs(xs[1] - xs[0]), 1);
+        const scale = pinch.startDist / newDist;
+        const newVis = Math.max(10, Math.min(n, pinch.startVis * scale));
+        const anchor = pinch.startS + pinch.midFrac * pinch.startVis;
+        viewRef.current.start = Math.max(0, anchor - pinch.midFrac * newVis);
+        viewRef.current.end   = Math.min(n, viewRef.current.start + newVis);
+        if (viewRef.current.end > n) { viewRef.current.end = n; viewRef.current.start = Math.max(0, n - newVis); }
+        draw();
+        return;
+      }
       if (!drag.active) return;
       const W = Math.max(canvas!.parentElement!.clientWidth || 400, 200);
       const chartW = W - PAD.left - PAD.right;
@@ -282,7 +314,19 @@ export default function TopDivChart({ chart, macdDetail, rsiDetail }: Props) {
       draw();
     };
 
-    const onPointerUp = () => { drag.active = false; };
+    const onPointerUp = (e: PointerEvent) => {
+      pointers.delete(e.pointerId);
+      if (pointers.size < 2) pinch = null;
+      if (pointers.size === 0) {
+        drag.active = false;
+      } else if (pointers.size === 1) {
+        const [lastX] = Array.from(pointers.values());
+        drag.active = true;
+        drag.startX = lastX;
+        drag.startS = viewRef.current.start;
+        drag.startE = viewRef.current.end;
+      }
+    };
 
     const ro = new ResizeObserver(draw);
     ro.observe(canvas.parentElement!);
