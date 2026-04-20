@@ -187,8 +187,9 @@ export async function fetchValuation(ticker: string, currentPrice?: number): Pro
     let trailingPE: number | null = null;
     const annualEpsArr: { date: string; eps: number }[] = [];
 
-    // price module: most reliable source of trailingPE; defaultKeyStatistics/summaryDetail: forwardPE
-    const summaryUrl = `${YF_BASE}/v10/finance/quoteSummary/${ticker}?modules=price,defaultKeyStatistics,summaryDetail,incomeStatementHistory`;
+    // earningsTrend: forward EPS estimates; price/defaultKeyStatistics/summaryDetail: P/E ratios;
+    // incomeStatementHistory: annual diluted EPS history
+    const summaryUrl = `${YF_BASE}/v10/finance/quoteSummary/${ticker}?modules=price,defaultKeyStatistics,summaryDetail,earningsTrend,incomeStatementHistory`;
     const summaryRes = await fetch(`${CF_PROXY}${encodeURIComponent(summaryUrl)}`);
     if (summaryRes.ok) {
       const sj = await summaryRes.json();
@@ -198,6 +199,20 @@ export async function fetchValuation(ticker: string, currentPrice?: number): Pro
       const sd = r0?.summaryDetail ?? {};
       forwardPE  = pr?.forwardPE?.raw  ?? ks?.forwardPE?.raw  ?? sd?.forwardPE?.raw  ?? null;
       trailingPE = pr?.trailingPE?.raw ?? ks?.trailingPE?.raw ?? sd?.trailingPE?.raw ?? null;
+
+      // Forward P/E from earningsTrend: use "+1y" forward EPS estimate
+      if (forwardPE == null && currentPrice && currentPrice > 0) {
+        const trends = (r0?.earningsTrend?.trend ?? []) as Array<{
+          period?: string;
+          earningsEstimate?: { avg?: { raw?: number } };
+        }>;
+        // Prefer "+1y" (next fiscal year), fallback to "0y" (current year)
+        const fwdTrend = trends.find(t => t.period === "+1y") ?? trends.find(t => t.period === "0y");
+        const fwdEPS = fwdTrend?.earningsEstimate?.avg?.raw;
+        if (fwdEPS && fwdEPS > 0) {
+          forwardPE = Math.round((currentPrice / fwdEPS) * 10) / 10;
+        }
+      }
 
       // Annual EPS from income statement history
       const stmts = (r0?.incomeStatementHistory?.incomeStatementHistory ?? []) as Array<{
@@ -214,7 +229,7 @@ export async function fetchValuation(ticker: string, currentPrice?: number): Pro
     }
 
     // Last resort: if P/E still null but we have EPS + current price, compute trailing P/E
-    if (forwardPE == null && trailingPE == null && currentPrice && currentPrice > 0 && annualEpsArr.length > 0) {
+    if (trailingPE == null && currentPrice && currentPrice > 0 && annualEpsArr.length > 0) {
       const recentEPS = [...annualEpsArr].sort((a, b) => b.date.localeCompare(a.date))[0]?.eps;
       if (recentEPS && recentEPS > 0) {
         trailingPE = Math.round((currentPrice / recentEPS) * 10) / 10;

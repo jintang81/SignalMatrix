@@ -60,6 +60,7 @@ export interface Gate0Result {
   message: string;
   canEvaluate: boolean;
   currentPE?: number;
+  peType?: "forward" | "trailing";
   medianPE?: number;
   threshold13x?: number;
   ratio?: number;

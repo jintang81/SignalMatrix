@@ -289,11 +289,11 @@ def get_valuation(
         "fetched_at":  datetime.utcnow().isoformat() + "Z",
     }
 
-    # 1. Forward P/E + Trailing P/E
+    # 1. Forward P/E + Trailing P/E (+ earningsTrend for forward EPS estimates)
     try:
         data = _yf_get(
             f"/v10/finance/quoteSummary/{ticker}",
-            {"modules": "defaultKeyStatistics,summaryDetail"},
+            {"modules": "defaultKeyStatistics,summaryDetail,earningsTrend"},
         )
         r0 = (data.get("quoteSummary", {}).get("result") or [{}])[0]
         ks = r0.get("defaultKeyStatistics", {})

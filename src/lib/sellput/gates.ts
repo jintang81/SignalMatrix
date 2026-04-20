@@ -83,6 +83,8 @@ export function runGate0(
   };
   if (!valuation?.ok) return empty;
   const currentPE = valuation.forward_pe || valuation.trailing_pe;
+  const peType: "forward" | "trailing" = (valuation.forward_pe != null && valuation.forward_pe > 0)
+    ? "forward" : "trailing";
   if (currentPE == null || currentPE <= 0) {
     return { ...empty, message: "当前 P/E 不可用（可能是亏损公司）" };
   }
@@ -91,6 +93,7 @@ export function runGate0(
     return {
       status: "unknown",
       currentPE,
+      peType,
       message: `样本不足（仅 ${hist?.sampleSize || 0} 年历史P/E），无法判断估值水位`,
       canEvaluate: false,
     };
@@ -109,7 +112,7 @@ export function runGate0(
   }
   return {
     status, message, canEvaluate: true,
-    currentPE, medianPE: hist.median, threshold13x: hist.threshold13x,
+    currentPE, peType, medianPE: hist.median, threshold13x: hist.threshold13x,
     ratio, sampleSize: hist.sampleSize,
     historicalPEs: hist.historicalPEs,
   };
