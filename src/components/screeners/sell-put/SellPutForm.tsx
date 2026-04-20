@@ -1,7 +1,35 @@
 "use client";
 
+import { useState } from "react";
 import type { DataSource, EntryMode, ScanParams } from "@/lib/sellput/types";
 import { DEFAULT_TICKERS } from "@/lib/sellput/constants";
+
+// ─── TickerInput (keeps trailing comma so user can keep typing) ───────────
+
+function TickerInput({ value, onChange, placeholder }: {
+  value: string[];
+  onChange: (v: string[]) => void;
+  placeholder: string;
+}) {
+  const [raw, setRaw] = useState(value.join(","));
+  const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const v = e.target.value.toUpperCase();
+    setRaw(v);
+    onChange(v.split(",").map(t => t.trim()).filter(Boolean));
+  };
+  // On blur, clean up trailing commas / whitespace
+  const handleBlur = () => setRaw(value.join(","));
+  return (
+    <input
+      type="text"
+      value={raw}
+      onChange={handleChange}
+      onBlur={handleBlur}
+      placeholder={placeholder}
+      className="w-full bg-bg-3 border border-border rounded px-2 py-1.5 text-xs font-trading text-txt focus:outline-none focus:border-gold/60 placeholder:text-muted/30"
+    />
+  );
+}
 
 // ─── Props ────────────────────────────────────────────────────────────────
 
@@ -38,14 +66,10 @@ export default function SellPutForm({
           <label className="block text-[10px] text-muted/60 mb-1 tracking-widest">
             TICKERS (逗号分隔)
           </label>
-          <input
-            type="text"
-            value={params.tickers.join(",")}
-            onChange={e =>
-              set("tickers", e.target.value.toUpperCase().split(",").map(t => t.trim()).filter(Boolean))
-            }
+          <TickerInput
+            value={params.tickers}
+            onChange={v => set("tickers", v)}
             placeholder={DEFAULT_TICKERS}
-            className="w-full bg-bg-3 border border-border rounded px-2 py-1.5 text-xs font-trading text-txt focus:outline-none focus:border-gold/60 placeholder:text-muted/30"
           />
         </div>
 

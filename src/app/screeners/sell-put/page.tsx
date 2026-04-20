@@ -20,7 +20,7 @@ const DEFAULT_PARAMS: ScanParams = {
   tickers: DEFAULT_TICKERS.split(","),
   cash: 50000,
   dteMin: 21,
-  dteMax: 60,
+  dteMax: 45,
   entryMode: "neutral",
   dataSource: "backend",
 };
