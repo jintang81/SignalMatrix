@@ -1,8 +1,9 @@
 "use client";
 
 import { useState } from "react";
-import { fmt, fmtPct, fmtSignedPct } from "@/lib/sellput/math";
+import { fmt, fmtSignedPct } from "@/lib/sellput/math";
 import { scoreColor } from "@/lib/sellput/gates";
+import { LEVERAGE_MAP } from "@/lib/sellput/constants";
 import type {
   AnalysisResult,
   Gate0Result,
@@ -297,127 +298,173 @@ function Gate2Panel({ g, expDate }: { g: Gate2Result; expDate: string }) {
 
 // ─── Gate 3 ───────────────────────────────────────────────────────────────
 
-function Gate3Panel({ g }: { g: Gate3Result }) {
-  const best = g.bestCandidate;
+function Gate3Panel({ result }: { result: AnalysisResult }) {
+  const g = result.gate3;
+  const gate1 = result.gate1;
+  const gate2 = result.gate2;
+
+  // Display strategy: all in-range + up to 5 above + up to 3 below
+  const inRange    = g.candidates.filter(c => c.checks?.inRange);
+  const aboveRange = g.candidates.filter(c => c.strike > g.targetHighStrike).slice(0, 5);
+  const belowRange = g.candidates.filter(c => c.strike < g.targetLowStrike).slice(0, 3);
+  const displaySet = new Set([...aboveRange, ...inRange, ...belowRange].map(c => c.strike));
+  const displayCands = g.candidates.filter(c => displaySet.has(c.strike));
+
+  const leverage = Math.abs(LEVERAGE_MAP[result.ticker] || 1);
+
+  const chk = (b: boolean) => (
+    <span style={{ color: b ? "#00e676" : "#ef5350" }}>{b ? "✓" : "✗"}</span>
+  );
+
+  const lrsColor = (dist: number | undefined) => {
+    if (dist == null) return "#94a3b8";
+    if (dist > 0.05) return "#00e676";
+    if (dist > 0) return "#f0cc6e";
+    return "#ef5350";
+  };
+
   return (
     <div className="panel p-3">
-      <SectionHeader num="G3" title="合约筛选 · Contract Selection" color="#26a69a" />
+      {/* Header */}
+      <div className="flex items-center gap-2 mb-0.5">
+        <span className="text-[10px] font-trading px-1.5 py-0.5 rounded border" style={{ borderColor: "#26a69a50", color: "#26a69a" }}>G3</span>
+        <span className="text-[11px] tracking-wider text-txt/80">参数选择 · Contract Selection</span>
+        <span className={`tag ${g.bestCandidate ? "tag-ok" : "tag-warn"} text-[9px] ml-auto`}>
+          {g.bestCandidate ? "已找到最佳合约" : "无符合全部条件的合约"}
+        </span>
+      </div>
+      <p className="text-[9px] text-muted/50 mb-3">量化基准OTM = ATR% × 乘数 × √(DTE/30), 替代主观的&quot;强势6-8%&quot;</p>
 
       {/* OTM calculation */}
-      <div className="flex gap-3 flex-wrap text-[10px] font-trading mb-3">
-        <span>基础 OTM <span className="text-txt">{(g.baseOTM * 100).toFixed(1)}%</span></span>
-        <span>乘数 <span className="text-txt">{g.multiplier.toFixed(2)}×</span></span>
-        <span>DTE 系数 <span className="text-txt">{g.dteScale.toFixed(2)}</span></span>
-        <span className="text-gold">
-          目标区间 [{(g.finalOTMLow * 100).toFixed(1)}%, {(g.finalOTMHigh * 100).toFixed(1)}%]
-        </span>
-        {g.atrPct != null && (
-          <span>ATR <span className="text-txt">{(g.atrPct * 100).toFixed(2)}%</span></span>
-        )}
+      <div className="rounded border p-2.5 mb-3" style={{ background: "rgba(26,166,154,0.04)", borderColor: "rgba(26,166,154,0.2)" }}>
+        <p className="text-[10px] font-trading text-txt/60 mb-2">📐 OTM 区间计算</p>
+        <div className="space-y-1.5">
+          {([
+            ["ATR% (14日)",    g.atrPct != null ? `${(g.atrPct * 100).toFixed(2)}%` : "—"],
+            ["入场模式乘数",    `× ${g.multiplier}`],
+            ["DTE 缩放",       `× ${g.dteScale.toFixed(3)} (√${result.chosenDTE}/30)`],
+            ["基准 OTM",       `${(g.baseOTM * 100).toFixed(2)}%`],
+            ["+ 第二关事件调整", `+${gate2.totalOTM.toFixed(1)}%`],
+            ["+ IV/HV 保守加宽", `+${gate1.ivHvExtraOTM.toFixed(1)}%`],
+          ] as [string, string][]).map(([k, v]) => (
+            <div key={k} className="flex items-baseline justify-between text-[10px] font-trading">
+              <span className="text-muted/50">{k}</span>
+              <span className="text-txt/80">{v}</span>
+            </div>
+          ))}
+        </div>
+        <div className="border-t mt-2 pt-2 space-y-1" style={{ borderColor: "rgba(26,166,154,0.2)" }}>
+          <div className="flex items-baseline justify-between text-[10px] font-trading">
+            <span className="text-muted/50">目标 OTM 区间</span>
+            <span className="font-bold text-gold-2">{(g.finalOTMLow * 100).toFixed(1)}% - {(g.finalOTMHigh * 100).toFixed(1)}%</span>
+          </div>
+          <div className="flex items-baseline justify-between text-[10px] font-trading">
+            <span className="text-muted/50">目标行权价区间</span>
+            <span className="font-bold text-gold-2">${fmt(g.targetLowStrike)} - ${fmt(g.targetHighStrike)}</span>
+          </div>
+        </div>
       </div>
 
-      {/* Best candidate */}
-      {best ? (
-        <div className="bg-bg-3 rounded p-2 mb-3">
-          <div className="flex items-center gap-2 mb-1.5">
-            <span className="tag tag-ok text-[9px]">最优合约</span>
-            <span className="font-trading text-txt">Strike ${fmt(best.strike)}</span>
-            {best.expiration && (
-              <span className="text-[9px] text-muted/40">{best.expiration}</span>
-            )}
-          </div>
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 text-[10px] font-trading">
-            <div>
-              <div className="text-muted/40 mb-0.5">OTM%</div>
-              <div className="text-txt">{best.otmPct != null ? fmt(best.otmPct * 100, 1) + "%" : "—"}</div>
+      {/* LRS Triangle */}
+      <div className="rounded border p-2.5 mb-3" style={{ background: "rgba(167,139,250,0.04)", borderColor: "rgba(167,139,250,0.2)" }}>
+        <p className="text-[10px] font-trading text-txt/60 mb-2">🔺 行权价 · 接货价 · LRS 强平价 三角关系</p>
+        <div className="space-y-1.5">
+          {([
+            [`当前 ${result.ticker}`,           `$${fmt(result.currentPrice)}`],
+            [`${result.parentTicker} 当前价`,    `$${fmt(result.parentPrice)}`],
+            [`${result.parentTicker} MA200`,     `$${fmt(result.parentMA200)} (距 ${fmtSignedPct(result.parentMA200Dist)})`],
+            ["杠杆倍数",                          `× ${leverage}`],
+          ] as [string, string][]).map(([k, v]) => (
+            <div key={k} className="flex items-baseline justify-between text-[10px] font-trading">
+              <span className="text-muted/50">{k}</span>
+              <span className="text-txt/80">{v}</span>
             </div>
-            <div>
-              <div className="text-muted/40 mb-0.5">Mid</div>
-              <div className="text-gold">${fmt(best.mid ?? best.last)}</div>
-            </div>
-            <div>
-              <div className="text-muted/40 mb-0.5">年化 ROI</div>
-              <div className="text-bull">{best.annualROI != null ? fmt(best.annualROI * 100, 1) + "%" : "—"}</div>
-            </div>
-            <div>
-              <div className="text-muted/40 mb-0.5">Delta</div>
-              <div>{best.greeks?.delta != null ? fmt(best.greeks.delta, 3) : "—"}</div>
-            </div>
-            <div>
-              <div className="text-muted/40 mb-0.5">Gamma</div>
-              <div>{best.greeks?.gamma != null ? fmt(best.greeks.gamma, 4) : "—"}</div>
-            </div>
-            <div>
-              <div className="text-muted/40 mb-0.5">Theta</div>
-              <div>{best.greeks?.theta != null ? fmt(best.greeks.theta, 3) : "—"}</div>
-            </div>
-            <div>
-              <div className="text-muted/40 mb-0.5">Vega</div>
-              <div>{best.greeks?.vega != null ? fmt(best.greeks.vega, 3) : "—"}</div>
-            </div>
-            <div>
-              <div className="text-muted/40 mb-0.5">OI</div>
-              <div>{best.open_interest ?? "—"}</div>
-            </div>
-          </div>
-
-          {/* Check badges */}
-          {best.checks && (
-            <div className="flex gap-1 flex-wrap mt-2">
-              {Object.entries(best.checks).map(([k, v]) => (
-                <span
-                  key={k}
-                  className="text-[9px] px-1 py-0.5 rounded"
-                  style={{
-                    background: v ? "#00e67615" : "#ef535015",
-                    color: v ? "#00e676" : "#ef5350",
-                  }}
-                >
-                  {k}
-                </span>
-              ))}
-            </div>
-          )}
+          ))}
         </div>
-      ) : (
-        <p className="text-[10px] text-bear/70 mb-3">无满足条件的合约</p>
-      )}
+        <div className="border-t mt-2 pt-2" style={{ borderColor: "rgba(167,139,250,0.2)" }}>
+          <div className="flex items-baseline justify-between text-[10px] font-trading mb-1">
+            <span style={{ color: "#f0cc6e" }}>估计 {result.ticker} @ {result.parentTicker}MA200</span>
+            <span style={{ color: "#f0cc6e" }}>${fmt(g.estETFAtParentMA200)}</span>
+          </div>
+          <p className="text-[9px] text-muted/50 leading-relaxed">
+            ⚠️ 如果 {result.parentTicker} 跌到 MA200, LRS 规则强制平仓 {result.ticker}, 参考价约 ${fmt(g.estETFAtParentMA200)}。行权价必须高于此价至少 3% 才安全。
+          </p>
+        </div>
+      </div>
 
       {/* Candidates table */}
-      {g.candidates.length > 1 && (
-        <div className="overflow-x-auto">
-          <table className="w-full text-[9px] font-trading min-w-[420px]">
-            <thead>
-              <tr className="text-muted/40 border-b border-border/30">
-                <th className="text-left py-1 px-1">Strike</th>
-                <th className="text-left py-1 px-1">OTM%</th>
-                <th className="text-left py-1 px-1">Mid</th>
-                <th className="text-left py-1 px-1">年化ROI</th>
-                <th className="text-left py-1 px-1">Delta</th>
-                <th className="text-left py-1 px-1">OI</th>
-                <th className="text-left py-1 px-1">通过</th>
-              </tr>
-            </thead>
-            <tbody>
-              {g.candidates.slice(0, 10).map((c, i) => (
-                <tr
-                  key={i}
-                  className={`border-b border-border/15 ${
-                    c === best ? "bg-up/5" : ""
-                  }`}
-                >
-                  <td className="py-1 px-1 text-txt">${fmt(c.strike)}</td>
-                  <td className="py-1 px-1">{c.otmPct != null ? fmt(c.otmPct * 100, 1) + "%" : "—"}</td>
-                  <td className="py-1 px-1 text-gold">${fmt(c.mid ?? c.last)}</td>
-                  <td className="py-1 px-1 text-bull">{c.annualROI != null ? fmt(c.annualROI * 100, 1) + "%" : "—"}</td>
-                  <td className="py-1 px-1">{c.greeks?.delta != null ? fmt(c.greeks.delta, 3) : "—"}</td>
-                  <td className="py-1 px-1 text-muted/60">{c.open_interest ?? "—"}</td>
-                  <td className="py-1 px-1">{c.qualifyCount ?? 0}/7</td>
+      {g.candidates.length > 0 ? (
+        <>
+          <p className="text-[10px] font-trading text-txt/70 mb-1.5">
+            📋 候选合约
+            <span className="text-[9px] font-normal text-muted/50 ml-1.5">
+              目标区间 ${fmt(g.targetLowStrike)} - ${fmt(g.targetHighStrike)} 全部展示，上下各附若干对比行
+            </span>
+          </p>
+          <div className="overflow-x-auto">
+            <table className="w-full text-[9px] font-trading min-w-[600px]">
+              <thead>
+                <tr className="text-muted/40 border-b" style={{ borderColor: "rgba(46,58,80,0.5)" }}>
+                  <th className="text-left py-1.5 px-1.5">行权价</th>
+                  <th className="text-right py-1.5 px-1.5">OTM%</th>
+                  <th className="text-right py-1.5 px-1.5">Δ</th>
+                  <th className="text-right py-1.5 px-1.5">Γ</th>
+                  <th className="text-right py-1.5 px-1.5">θ</th>
+                  <th className="text-right py-1.5 px-1.5">中间价</th>
+                  <th className="text-right py-1.5 px-1.5">年化ROI</th>
+                  <th className="text-right py-1.5 px-1.5">OI</th>
+                  <th className="text-right py-1.5 px-1.5">距LRS</th>
+                  <th className="text-right py-1.5 px-1.5">区间/Δ/Γ/θ/ROI/流动/LRS</th>
                 </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
+              </thead>
+              <tbody>
+                {displayCands.map((c, i) => {
+                  const isBest   = g.bestCandidate?.strike === c.strike;
+                  const isInRange = c.checks?.inRange;
+                  const ck = c.checks;
+                  const lrsDist = c.strikeToLRSDist;
+                  const lrsCl   = lrsColor(lrsDist);
+                  return (
+                    <tr
+                      key={i}
+                      className="border-b"
+                      style={{
+                        borderColor: "rgba(46,58,80,0.3)",
+                        background: isBest ? "rgba(0,230,118,0.06)" : isInRange ? "rgba(26,166,154,0.04)" : "transparent",
+                      }}
+                    >
+                      <td className="py-1.5 px-1.5 font-bold text-txt">
+                        ${fmt(c.strike)}
+                        {isBest    && <span className="tag tag-ok   text-[8px] ml-1">推荐</span>}
+                        {!isBest && isInRange && <span className="tag tag-info text-[8px] ml-1">目标区间</span>}
+                      </td>
+                      <td className="text-right py-1.5 px-1.5 text-txt/80">{c.otmPct != null ? (c.otmPct * 100).toFixed(2) + "%" : "—"}</td>
+                      <td className="text-right py-1.5 px-1.5 text-muted/70">{c.greeks?.delta != null ? fmt(c.greeks.delta, 3) : "—"}</td>
+                      <td className="text-right py-1.5 px-1.5 text-muted/70">{c.greeks?.gamma != null ? fmt(c.greeks.gamma, 3) : "—"}</td>
+                      <td className="text-right py-1.5 px-1.5 text-muted/70">{c.greeks?.theta != null ? fmt(c.greeks.theta, 2) : "—"}</td>
+                      <td className="text-right py-1.5 px-1.5 text-gold">${fmt(c.mid ?? c.last)}</td>
+                      <td className="text-right py-1.5 px-1.5 text-bull">{c.annualROI != null ? (c.annualROI * 100).toFixed(1) + "%" : "—"}</td>
+                      <td className="text-right py-1.5 px-1.5 text-muted/60">{c.open_interest ?? c.openInterest ?? "—"}</td>
+                      <td className="text-right py-1.5 px-1.5 font-bold" style={{ color: lrsCl }}>
+                        {lrsDist != null ? (lrsDist * 100).toFixed(1) + "%" : "—"}
+                      </td>
+                      <td className="text-right py-1.5 px-1.5">
+                        {ck ? (
+                          <span className="space-x-0.5">
+                            {chk(ck.inRange)}{chk(ck.deltaOk)}{chk(ck.gammaOk)}
+                            {chk(ck.thetaOk)}{chk(ck.annualOk)}{chk(ck.liquidityOk)}{chk(ck.lrsSafe)}
+                          </span>
+                        ) : "—"}
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        </>
+      ) : (
+        <p className="text-[10px] text-bear/70">无候选合约</p>
       )}
     </div>
   );
@@ -526,7 +573,7 @@ export default function SellPutDetail({ result }: { result: AnalysisResult }) {
       <Gate0Panel g={result.gate0} />
       <Gate1Panel g={result.gate1} />
       <Gate2Panel g={result.gate2} expDate={result.chosenExpDate} />
-      <Gate3Panel g={result.gate3} />
+      <Gate3Panel result={result} />
       {result.gate4 && <Gate4Panel g={result.gate4} />}
       {result.gate5 && <Gate5Panel g={result.gate5} />}
       <ReflectionsPanel reflections={result.reflections} />
