@@ -89,6 +89,7 @@ from screener_top_volume import run_top_volume_scan
 from screener_inverted_duck_bill import run_inverted_duck_scan as run_inverted_duck_scan_fn
 from ai_strategy import run_ai_strategy
 from screener_nl import run_nl_search, run_fundamentals_refresh
+from sellput_proxy import router as sellput_router
 
 # ─── App ──────────────────────────────────────────────────────────
 
@@ -136,6 +137,9 @@ _ai_strategy_executor      = ThreadPoolExecutor(max_workers=1)  # one AI strateg
 _inverted_duck_executor    = ThreadPoolExecutor(max_workers=1)  # one inverted-duck scan at a time
 _nl_executor               = ThreadPoolExecutor(max_workers=2)  # NL search + fundamentals refresh
 
+
+# ─── Sell Put proxy router ────────────────────────────────────────
+app.include_router(sellput_router)
 
 # ─── Endpoints ────────────────────────────────────────────────────
 
