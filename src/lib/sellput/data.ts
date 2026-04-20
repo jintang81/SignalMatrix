@@ -162,7 +162,20 @@ export async function fetchValuation(ticker: string): Promise<ValuationData> {
     });
     if (res.ok) {
       const json = await res.json();
-      if (json?.ok) return json as ValuationData;
+      // Backend returns { ticker, forward_pe, trailing_pe, annual_eps, data_source, fetched_at }
+      // — no `ok` field. Construct ValuationData manually.
+      if (json?.ticker) {
+        const annualEps = (json.annual_eps ?? []) as ValuationData["annual_eps"];
+        const forwardPE = (json.forward_pe ?? null) as number | null;
+        const trailingPE = (json.trailing_pe ?? null) as number | null;
+        return {
+          ticker: json.ticker,
+          forward_pe: forwardPE,
+          trailing_pe: trailingPE,
+          annual_eps: annualEps,
+          ok: annualEps.length > 0 || forwardPE != null || trailingPE != null,
+        };
+      }
     }
   } catch {
     // fall through to Yahoo Finance direct
