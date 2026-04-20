@@ -173,30 +173,44 @@ function Gate0Panel({ g }: { g: Gate0Result }) {
 // ─── Gate 1 ───────────────────────────────────────────────────────────────
 
 function Gate1Panel({ g }: { g: Gate1Result }) {
+  const failedNames = g.items.filter(i => !i.pass).map(i => i.name);
   return (
     <div className="panel p-3">
-      <SectionHeader
-        num="G1"
-        title="市场环境 · Market Environment"
-        pass={g.pass}
-        color="#4f9cf9"
-      />
-      <div className="space-y-1.5">
-        {g.items.map(item => (
-          <div key={item.name} className="flex items-start gap-2">
-            <PassBadge pass={item.pass} critical={item.critical} />
-            <div className="flex-1 min-w-0">
-              <div className="flex items-baseline gap-1.5 flex-wrap">
-                <span className="text-[10px] font-trading text-txt/80">{item.name}</span>
-                <span className="text-[9px] text-muted/40">{item.rule}</span>
+      <div className="flex items-center gap-2 mb-2">
+        <span
+          className="text-[10px] font-trading px-1.5 py-0.5 rounded border"
+          style={{ borderColor: "#4f9cf950", color: "#4f9cf9" }}
+        >
+          G1
+        </span>
+        <span className="text-[11px] tracking-wider text-txt/80">市场环境 · Market Environment</span>
+        <span
+          className="ml-auto text-[10px] font-trading"
+          style={{ color: g.pass ? "#00e676" : "#ef5350" }}
+        >
+          {g.pass ? "✓ 通过" : `失败 (${failedNames.join(", ")})`}
+        </span>
+      </div>
+      <p className="text-[9px] text-muted/50 mb-2">目标: 确认当前环境对卖方基本安全。过关只代表可以继续，不代表这是特别好的时机。</p>
+      <div className="space-y-1">
+        {g.items.map(item => {
+          const sym = item.pass ? "✓" : item.critical ? "✗" : "⚠";
+          const symColor = item.pass ? "#00e676" : item.critical ? "#ef5350" : "#f0cc6e";
+          const nameColor = item.pass ? "#00e676" : item.critical ? "#ef5350" : "#f0cc6e";
+          return (
+            <div key={item.name}>
+              <div className="flex items-baseline gap-2">
+                <span className="text-[11px]" style={{ color: symColor }}>{sym}</span>
+                <span className="text-[11px] font-trading" style={{ color: nameColor }}>{item.name}</span>
               </div>
-              <div className="text-[10px] font-trading text-muted/60">{item.value}</div>
               {item.note && (
-                <div className="text-[9px] text-muted/40 italic">{item.note}</div>
+                <div className="ml-5 text-[10px] text-muted/50 italic mt-0.5">
+                  <span className="mr-1">💡</span>{item.note}
+                </div>
               )}
             </div>
-          </div>
-        ))}
+          );
+        })}
       </div>
     </div>
   );
