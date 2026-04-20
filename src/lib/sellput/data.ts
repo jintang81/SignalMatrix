@@ -1,4 +1,4 @@
-import { PARENT_MAP } from "./constants";
+import { PARENT_MAP, PARENT_EARNINGS_MAP } from "./constants";
 import {
   calcATR,
   calcHV,
@@ -370,8 +370,9 @@ export async function analyzeTicker(
       }
     }
 
-    // 9. Earnings
-    const watchTickers = [...new Set([ticker, parentTicker])];
+    // 9. Earnings — fetch for all tickers in PARENT_EARNINGS_MAP (e.g. Mag7 for QQQ)
+    const earningsWatch = PARENT_EARNINGS_MAP[parentTicker] ?? [parentTicker];
+    const watchTickers = [...new Set([ticker, parentTicker, ...earningsWatch])];
     const earningsResults = await Promise.allSettled(
       watchTickers.map(t => fetchEarningsDate(t))
     );
