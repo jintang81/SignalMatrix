@@ -74,7 +74,7 @@ const BEAR_SIGNAL: Screener[] = [
   },
 ];
 
-const OPTIONS_FLOW: Screener[] = [
+const OPTION_SIGNALS: Screener[] = [
   {
     id: "unusual-options",
     name: "UNUSUAL OPTIONS FLOW",
@@ -84,14 +84,11 @@ const OPTIONS_FLOW: Screener[] = [
     href: "/screeners/unusual-options",
     available: true,
   },
-];
-
-const OPTIONS_INCOME: Screener[] = [
   {
     id: "sell-put",
     name: "SELL PUT",
     nameZh: "Sell Put 开仓决策",
-    desc: "五关决策框架评估高波动杠杆ETF（TQQQ/SOXL/NVDL/TSLL）的现金担保Put卖出时机，集成估值、市场环境、事件日历、合约筛选与止盈止损规则。",
+    desc: "五关决策框架评估杠杆ETF现金担保Put卖出时机，集成估值、市场环境、事件日历、合约筛选与止盈止损规则。",
     tags: ["Sell Put", "期权收益", "波动率", "五关决策"],
     href: "/screeners/sell-put",
     available: true,
@@ -215,17 +212,10 @@ export default function ScreeerPage() {
         screeners={BEAR_SIGNAL}
       />
       <Section
-        title="OPTIONS FLOW"
-        titleZh="期权异常信号"
+        title="OPTION SIGNALS"
+        titleZh="期权信号"
         accent="#4f9cf9"
-        screeners={OPTIONS_FLOW}
-      />
-
-      <Section
-        title="OPTIONS INCOME"
-        titleZh="期权收益策略"
-        accent="#a78bfa"
-        screeners={OPTIONS_INCOME}
+        screeners={OPTION_SIGNALS}
       />
 
       <Section
