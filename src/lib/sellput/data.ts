@@ -154,7 +154,7 @@ async function fetchEarningsDate(ticker: string): Promise<EarningsInfo | null> {
 
 // ─── fetchValuation ────────────────────────────────────────────────────────
 
-export async function fetchValuation(ticker: string): Promise<ValuationData> {
+export async function fetchValuation(ticker: string, currentPrice?: number): Promise<ValuationData> {
   try {
     const backendUrl = `${getBackendUrl()}/api/sellput/valuation/${ticker}`;
     const res = await fetch(backendUrl, {
@@ -187,15 +187,17 @@ export async function fetchValuation(ticker: string): Promise<ValuationData> {
     let trailingPE: number | null = null;
     const annualEpsArr: { date: string; eps: number }[] = [];
 
-    const summaryUrl = `${YF_BASE}/v10/finance/quoteSummary/${ticker}?modules=defaultKeyStatistics,summaryDetail,incomeStatementHistory`;
+    // price module: most reliable source of trailingPE; defaultKeyStatistics/summaryDetail: forwardPE
+    const summaryUrl = `${YF_BASE}/v10/finance/quoteSummary/${ticker}?modules=price,defaultKeyStatistics,summaryDetail,incomeStatementHistory`;
     const summaryRes = await fetch(`${CF_PROXY}${encodeURIComponent(summaryUrl)}`);
     if (summaryRes.ok) {
       const sj = await summaryRes.json();
       const r0 = (sj?.quoteSummary?.result ?? [{}])[0] ?? {};
+      const pr = r0?.price ?? {};
       const ks = r0?.defaultKeyStatistics ?? {};
       const sd = r0?.summaryDetail ?? {};
-      forwardPE  = ks?.forwardPE?.raw  ?? sd?.forwardPE?.raw  ?? null;
-      trailingPE = ks?.trailingPE?.raw ?? sd?.trailingPE?.raw ?? null;
+      forwardPE  = pr?.forwardPE?.raw  ?? ks?.forwardPE?.raw  ?? sd?.forwardPE?.raw  ?? null;
+      trailingPE = pr?.trailingPE?.raw ?? ks?.trailingPE?.raw ?? sd?.trailingPE?.raw ?? null;
 
       // Annual EPS from income statement history
       const stmts = (r0?.incomeStatementHistory?.incomeStatementHistory ?? []) as Array<{
@@ -208,6 +210,14 @@ export async function fetchValuation(ticker: string): Promise<ValuationData> {
         if (ts != null && eps != null && eps > 0) {
           annualEpsArr.push({ date: new Date(ts * 1000).toISOString().slice(0, 10), eps });
         }
+      }
+    }
+
+    // Last resort: if P/E still null but we have EPS + current price, compute trailing P/E
+    if (forwardPE == null && trailingPE == null && currentPrice && currentPrice > 0 && annualEpsArr.length > 0) {
+      const recentEPS = [...annualEpsArr].sort((a, b) => b.date.localeCompare(a.date))[0]?.eps;
+      if (recentEPS && recentEPS > 0) {
+        trailingPE = Math.round((currentPrice / recentEPS) * 10) / 10;
       }
     }
 
@@ -335,7 +345,7 @@ export async function analyzeTicker(
       .filter((e): e is NonNullable<typeof e> => e != null);
 
     // 10. Valuation (parent only — ETFs typically have no P/E)
-    const valuation = await fetchValuation(parentTicker);
+    const valuation = await fetchValuation(parentTicker, parentPrice);
 
     // 11. Computed metrics
     const hv = calcHV(etfData.closes, 20);
