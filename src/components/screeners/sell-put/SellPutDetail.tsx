@@ -544,6 +544,7 @@ function Gate3Panel({ result }: { result: AnalysisResult }) {
         <p className="text-[10px] font-trading text-txt/60 mb-2">📐 OTM 区间计算</p>
         <div className="space-y-1.5">
           {([
+            ["到期日",          result.chosenExpDate || "—"],
             ["ATR% (14日)",    g.atrPct != null ? `${(g.atrPct * 100).toFixed(2)}%` : "—"],
             ["入场模式乘数",    `× ${g.multiplier}`],
             ["DTE 缩放",       `× ${g.dteScale.toFixed(3)} (√${result.chosenDTE}/30)`],
@@ -676,7 +677,7 @@ function Gate3Panel({ result }: { result: AnalysisResult }) {
 
 // ─── Gate 4 ───────────────────────────────────────────────────────────────
 
-function Gate4Panel({ g }: { g: Gate4Result }) {
+function Gate4Panel({ g, expDate, strike }: { g: Gate4Result; expDate: string; strike: number | null }) {
   return (
     <div className="panel p-3">
       <SectionHeader num="G4" title="执行检查 · Execution" color="#f0cc6e" />
@@ -710,6 +711,8 @@ function Gate4Panel({ g }: { g: Gate4Result }) {
         ))}
       </div>
       <div className="flex gap-4 text-[10px] font-trading flex-wrap">
+        <span>到期日 <span className="text-txt">{expDate || "—"}</span></span>
+        <span>行权价 <span className="text-txt">{strike != null ? `$${fmt(strike)}` : "—"}</span></span>
         <span>保证金 <span className="text-txt">${g.margin.toFixed(0)}</span></span>
         <span>张数 <span className="text-txt">{g.contractsByCash}</span></span>
         <span>限价单 <span className="text-gold">${fmt(g.limitPrice)}</span></span>
@@ -793,7 +796,7 @@ export default function SellPutDetail({ result }: { result: AnalysisResult }) {
       <Gate1Panel g={result.gate1} />
       <Gate2Panel g={result.gate2} expDate={result.chosenExpDate} />
       <Gate3Panel result={result} />
-      {result.gate4 && <Gate4Panel g={result.gate4} />}
+      {result.gate4 && <Gate4Panel g={result.gate4} expDate={result.chosenExpDate} strike={result.gate3.bestCandidate?.strike ?? null} />}
       {result.gate5 && <Gate5Panel g={result.gate5} />}
       <ReflectionsPanel reflections={result.reflections} />
     </div>
