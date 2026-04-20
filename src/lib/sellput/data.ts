@@ -131,6 +131,20 @@ export async function fetchBackendOptions(
   return (json?.chain?.puts ?? []) as PutContract[];
 }
 
+// ─── fetchBackendExpirations ───────────────────────────────────────────────
+// Get expirations from Tradier via backend meta endpoint.
+// Returns expirations as UNIX timestamps (seconds) so chooseDTE can use them.
+
+async function fetchBackendExpirations(ticker: string): Promise<number[]> {
+  const base = `${getBackendUrl()}/api/sellput/options/${ticker}`;
+  const res = await fetch(base, { headers: { "X-Api-Key": getApiKey() } });
+  if (!res.ok) return [];
+  const json = await res.json();
+  // Backend returns { expirations: ["2025-05-16", ...] } in meta mode
+  const dateStrings: string[] = json?.expirations ?? [];
+  return dateStrings.map(d => Math.floor(new Date(d + "T16:00:00Z").getTime() / 1000));
+}
+
 // ─── fetchEarningsDate ────────────────────────────────────────────────────
 
 async function fetchEarningsDate(ticker: string): Promise<EarningsInfo | null> {
@@ -336,8 +350,14 @@ export async function analyzeTicker(
         Math.floor((now + d * 86400000) / 1000)
       );
     } else {
-      const yfOpts = await fetchYfOptions(ticker);
-      expirationTimestamps = yfOpts.expirations;
+      // Use Tradier's own expiration list — this ensures the chosen date
+      // actually exists in the Tradier chain (avoids sparse-strike weekly
+      // expirations that Yahoo Finance might return instead).
+      const [tradierExps, yfOpts] = await Promise.all([
+        fetchBackendExpirations(ticker),
+        fetchYfOptions(ticker),
+      ]);
+      expirationTimestamps = tradierExps.length > 0 ? tradierExps : yfOpts.expirations;
       atmIV = yfOpts.atmIV;
     }
 
