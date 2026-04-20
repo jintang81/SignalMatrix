@@ -683,13 +683,28 @@ function Gate4Panel({ g }: { g: Gate4Result }) {
       <div className="space-y-1.5 mb-3">
         {g.items.map(item => (
           <div key={item.name} className="flex items-start gap-2">
-            <PassBadge pass={item.pass} />
+            <span
+              className="text-[15px] leading-none shrink-0 w-5 text-center mt-0.5"
+              style={{ color: item.pass ? "#00e676" : "#ef5350" }}
+            >
+              {item.pass ? "✓" : "✗"}
+            </span>
             <div className="flex-1">
               <div className="flex items-baseline gap-1.5 flex-wrap">
-                <span className="text-[10px] font-trading text-txt/80">{item.name}</span>
+                <span
+                  className="text-[10px] font-trading"
+                  style={{ color: item.pass ? "#e2e8f0" : "#ef5350" }}
+                >
+                  {item.name}
+                </span>
                 <span className="text-[9px] text-muted/40">{item.rule}</span>
               </div>
-              <div className="text-[10px] font-trading text-muted/60">{item.value}</div>
+              <div
+                className="text-[10px] font-trading"
+                style={{ color: item.pass ? "#94a3b8" : "#ef5350cc" }}
+              >
+                {item.value}
+              </div>
             </div>
           </div>
         ))}
