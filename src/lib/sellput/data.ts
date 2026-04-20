@@ -275,7 +275,7 @@ export async function analyzeTicker(
 
     // 5. Parent MA200
     const parentMA200 = calcSMA(parentData.closes, 200) ?? parentPrice;
-    const parentMA200Dist = (parentPrice - parentMA200) / parentMA200;
+    const parentMA200Dist = (parentPrice - parentMA200) / parentPrice;
 
     // 6. ATM IV + expirations
     let atmIV: number | null = null;
