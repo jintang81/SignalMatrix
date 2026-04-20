@@ -53,40 +53,241 @@ function SectionHeader({ num, title, pass, color = "#94a3b8" }: {
 
 // ─── Glossary ─────────────────────────────────────────────────────────────
 
+type TermCard = { abbr: string; name: string; body: string };
+type TermSection = { title: string; color: string; terms: TermCard[] };
+
+const TERM_SECTIONS: TermSection[] = [
+  {
+    title: "期权基础术语",
+    color: "#4f9cf9",
+    terms: [
+      {
+        abbr: "Put",
+        name: "若跌期权",
+        body: "赋予持有人「以行权价卖出股票」权利的合约。Sell Put = 卖出这个权利，收取权利金，但承担在行权价买入股票的义务。",
+      },
+      {
+        abbr: "OTM",
+        name: "价外 Out-of-the-Money",
+        body: "行权价低于当前股价的看跌期权。OTM% =（当前价 − 行权价）/ 当前价。选 OTM 越远，被行权概率越低，但权利金也更少。本工具目标区间通常在 7-15%。",
+      },
+      {
+        abbr: "DTE",
+        name: "到期天数 Days to Expiry",
+        body: "合约距到期日的天数。本工具默认 21-45 天，是权利金时间价值衰减最快、风险相对可控的「黄金窗口」。",
+      },
+      {
+        abbr: "权利金",
+        name: "Premium",
+        body: "卖出期权时收到的钱，即你的最大收益。买方支付给你的「保险费」，每张合约对应 100 股，所以权利金 × 100 = 实际收入。",
+      },
+      {
+        abbr: "接货",
+        name: "Assignment",
+        body: "股价跌破行权价时被迫以行权价买入 100 股的事件。接货成本 = 行权价 − 已收权利金（比行权价低）。",
+      },
+      {
+        abbr: "CSP",
+        name: "现金担保卖Put",
+        body: "开仓前在账户里备好「行权价 × 100」的现金，确保行权时有现金接货。本工具「保证金」就是这笔钱。",
+      },
+      {
+        abbr: "GTC",
+        name: "持续有效限价单",
+        body: "不需要每天重复下单直到成交或取消。第五关止盈 / 止损单在开仓时同步挂出 GTC 单，不用每天盯。",
+      },
+    ],
+  },
+  {
+    title: "波动率相关",
+    color: "#a78bfa",
+    terms: [
+      {
+        abbr: "IV",
+        name: "隐含波动率 Implied Volatility",
+        body: "市场「预期」未来这只股票的年化波动幅度，从期权价格反推出来。IV 高 = 期权贵 = 卖方多钱。本工具只接受下限（≥ 40%），不设上限。IV 极端偏高（> 150%）时可用，但建议缩小仓位。",
+      },
+      {
+        abbr: "HV",
+        name: "历史波动率 Historical Volatility",
+        body: "股票过去（通常 20 日）的实际年化波动幅度，用对数收益的标准差计算。IV 是市场预期，HV 是历史事实。",
+      },
+      {
+        abbr: "IV/HV",
+        name: "波动率溢价比",
+        body: "IV ÷ HV，≥ 1.0 说明市场对未来走势的定价比历史实际更动荡，卖方有「超额溢价」。低于 1.0 时工具会自动把行权价推得更远一些。",
+      },
+      {
+        abbr: "IVR",
+        name: "IV Rank IV排名",
+        body: "当前 IV 在过去一年 IV 范围内的百分位。IVR = 70% 表示当前 IV 高于过去一年 70% 的时间，≥ 30% 才值得卖。本工具用历史 HV 序列近似计算。",
+      },
+      {
+        abbr: "波动率衰减",
+        name: "Volatility Decay",
+        body: "杠杆 ETF 特有的长期成本。即使父资产横盘震荡，每日重置机制也会让杠杆 ETF 净值缓慢磨损。震荡中的 Put 最大敌之一。",
+      },
+    ],
+  },
+  {
+    title: "期权 Greeks（数量化指标）",
+    color: "#26a69a",
+    terms: [
+      {
+        abbr: "Δ Delta",
+        name: "价格敏感度",
+        body: "标的每涨 $1，期权价格变化多少。Put 的 Delta 为负（-0 到 -1）。|Delta| = 0.25 ≈ 市场赌有 25% 概率被行权。本工具要求 |Δ| 在 0.15-0.35 之间。",
+      },
+      {
+        abbr: "Γ Gamma",
+        name: "Delta 变化速率",
+        body: "期权参数中 Delta 的变化速率。Gamma 越大，期权价值变化越剧烈，风险越难控制。本工具要求 Gamma < 0.08。",
+      },
+      {
+        abbr: "Θ Theta",
+        name: "时间价值衰减",
+        body: "每过一天，期权价值自然损失多少——对卖方来说是每天天赐的「零食」，这是卖方的「睡后收入」部分。本工具要求 |Θ| ≥ $0.03/股。",
+      },
+      {
+        abbr: "年化 ROI",
+        name: "年化收益率",
+        body: "=（权利金 / 保证金）× DTE ÷ 365，把按短期 DTE 的合约收益折算成年化，便于跨不同 DTE 的合约横向比较。本工具要求 ≥ 12%。",
+      },
+    ],
+  },
+  {
+    title: "技术分析术语",
+    color: "#f0cc6e",
+    terms: [
+      {
+        abbr: "ATR",
+        name: "平均真实波幅 Average True Range",
+        body: "过去 14 天每日最高价与最低价之差（含缺口）的平均值，反映当前的日内波动能力。ATR% = ATR ÷ 当前价。本工具「量化行权价远离基准」就参照它。",
+      },
+      {
+        abbr: "MA200",
+        name: "200 日均线",
+        body: "过去 200 个交易日收盘价的算术平均线，被许多机构视为「牛熊分界线」。LRS 规则以父资产（如 QQQ）的 MA200 为触发条件。",
+      },
+      {
+        abbr: "RSI",
+        name: "相对强弱指数",
+        body: "衡量近期涨幅 vs 跌幅的量能指标，范围 0-100。RSI > 75 说明近期短期超买，追高 Put 风险大。本工具要求 RSI ≤ 75。",
+      },
+      {
+        abbr: "VIX",
+        name: "恐慌指数",
+        body: "标普 500 期权合成的市场整体波动率预期（「市场情绪温度计」）。VIX < 20 = 平静；20-35 = 担忧；> 35 = 恐慌。本工具在 VIX ≥ 35 时停止开仓。",
+      },
+    ],
+  },
+  {
+    title: "本工具专有术语",
+    color: "#c9a84c",
+    terms: [
+      {
+        abbr: "LRS",
+        name: "杠杆ETF规则强制清仓线",
+        body: "部分券商规定：当父资产（如 QQQ）日线收盘跌破 MA200，必须强制卖出 TQQQ。所以行权价如果和 LRS 触发价相近，被行权就会发现货立即被卖出，行权价要和 LRS 强发的该 ETF 价格至少保持 3% 距离。",
+      },
+      {
+        abbr: "父资产",
+        name: "Underlying Parent",
+        body: "杠杆 ETF 跟踪的指数或股票。TQQQ 的父资产是 QQQ（纳斯达克 100），SOXL 是 SOXX（半导体指数），NVDL 是 NVDA，TSLL 是 TSLA。估值和 MA200 都参考父资产。",
+      },
+      {
+        abbr: "基准OTM",
+        name: "Base OTM Distance",
+        body: "行权价与现价之间应持有的最短距离，用 ATR × 乘数 × √(DTE/30) 计算，在事件加宽和 IV/HV 保守加宽后，得到最终目标 OTM 区间。",
+      },
+      {
+        abbr: "Gap Down",
+        name: "跳空低开",
+        body: "当出现重大突发消息，第二天开盘价直接比前一天收盘低很多。止损规则的「次日开盘平仓」在这种情况下的损失会远大于预想的，成交价会远低于预期。",
+      },
+      {
+        abbr: "接货/成本基础",
+        name: "Cost Basis",
+        body: "被行权后持有 ETF 的真实成本 = 行权价 − 已收权利金。比行权价低一点，是你真正「以多少钱买入」这批 ETF。",
+      },
+    ],
+  },
+];
+
 export function GlossaryPanel() {
   const [open, setOpen] = useState(false);
-  const terms = [
-    ["DTE", "到期天数 Days to Expiration — 合约剩余天数"],
-    ["OTM%", "虚值程度 Out-of-the-money — 行权价低于现价的百分比"],
-    ["IV", "隐含波动率 Implied Volatility"],
-    ["HV", "历史波动率 Historical Volatility (20日年化)"],
-    ["IV/HV", "IV 相对 HV 的倍数；>1.2 表示期权溢价高"],
-    ["IVR", "IV Rank — 当前 IV 在过去 252 日区间中的百分位"],
-    ["Delta", "期权价格对标的价格的敏感度；Put delta 为负"],
-    ["Gamma", "Delta 变化速率；越高越危险"],
-    ["Theta", "每日时间价值损耗；Sell Put 收益来源"],
-    ["Vega", "IV 每变动 1% 的期权价格变化"],
-    ["ATR", "平均真实波幅 Average True Range (14日)"],
-    ["LRS", "强平线 Liquidation Risk Strike — 母标的跌破 MA200 时杠杆 ETF 的估算价格"],
-    ["MA200", "200 日移动均线"],
-    ["年化 ROI", "权利金 ÷ 占用保证金 × (365÷DTE)"],
-    ["FOMC", "美联储利率决策会议"],
-  ];
   return (
     <div className="panel">
       <button
         onClick={() => setOpen(o => !o)}
         className="w-full flex items-center justify-between p-3 text-left"
       >
-        <span className="text-[10px] tracking-widest text-muted/60">名词术语 GLOSSARY</span>
+        <span className="text-[11px] tracking-widest text-muted/60">📘 策略说明 &amp; 术语速查（点击展开）</span>
         <span className="text-muted/40 text-xs">{open ? "▲" : "▼"}</span>
       </button>
+
       {open && (
-        <div className="px-3 pb-3 grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-1">
-          {terms.map(([term, def]) => (
-            <div key={term} className="flex gap-2 text-[10px]">
-              <span className="font-trading text-gold/80 w-16 shrink-0">{term}</span>
-              <span className="text-muted/60">{def}</span>
+        <div className="px-3 pb-4 space-y-4">
+
+          {/* ── Strategy intro ── */}
+          <div className="rounded border p-3" style={{ background: "rgba(79,156,249,0.05)", borderColor: "rgba(79,156,249,0.2)" }}>
+            <p className="text-[11px] font-bold text-txt mb-2">🔹 SELL PUT 是什么？</p>
+            <p className="text-[10px] text-muted/80 leading-relaxed mb-2">
+              <strong className="text-txt">Sell Put（卖出若跌期权）</strong>是一种通过收取权利金来赚钱的策略。
+              你向买方承诺：「如果到期日这只股票跌到 X 价格以下，我愿意以 X 价格买入 100 股。」
+            </p>
+            <div className="space-y-1.5 text-[10px] text-muted/70 leading-relaxed">
+              <p>
+                <span className="text-gold font-bold">收益结构</span>：如果股价没跌到行权价，期权作废，你白拿权利金 ✅；
+                如果股价跌破行权价，你被迫以行权价接货（但扣掉权利金后实际成本更低）。
+              </p>
+              <p>
+                <span className="text-gold font-bold">为什么用杠杆 ETF？</span>
+                TQQQ / SOXL / NVDL 这类 3× 杠杆 ETF 的隐含波动率（IV）极高，意味着卖出的期权权利金很贵，
+                年化收益率往往远超普通股票。代价是杠杆 ETF 带来的额外风险（见第五关风险反思）。
+              </p>
+              <p>
+                <span className="text-gold font-bold">本工具做什么？</span>
+                逐层检查「现在适不适合开仓」，并在筛选合约中找出最符合条件的那一张。
+              </p>
+            </div>
+          </div>
+
+          {/* ── Term sections ── */}
+          {TERM_SECTIONS.map(section => (
+            <div key={section.title}>
+              <div className="flex items-center gap-2 mb-2">
+                <span
+                  className="w-2 h-2 rounded-full shrink-0"
+                  style={{ background: section.color }}
+                />
+                <span
+                  className="text-[10px] font-bold tracking-wider"
+                  style={{ color: section.color }}
+                >
+                  {section.title}
+                </span>
+              </div>
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-2">
+                {section.terms.map(t => (
+                  <div
+                    key={t.abbr}
+                    className="rounded border p-2"
+                    style={{ background: "var(--color-bg-3)", borderColor: section.color + "25" }}
+                  >
+                    <div className="flex items-baseline gap-1.5 mb-1 flex-wrap">
+                      <span
+                        className="text-[10px] font-trading font-bold"
+                        style={{ color: section.color }}
+                      >
+                        {t.abbr}
+                      </span>
+                      <span className="text-[9px] text-muted/50">{t.name}</span>
+                    </div>
+                    <p className="text-[9px] text-muted/60 leading-relaxed">{t.body}</p>
+                  </div>
+                ))}
+              </div>
             </div>
           ))}
         </div>
