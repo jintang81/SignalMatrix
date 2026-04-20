@@ -303,10 +303,13 @@ function Gate3Panel({ result }: { result: AnalysisResult }) {
   const gate1 = result.gate1;
   const gate2 = result.gate2;
 
-  // Display strategy: all in-range + up to 5 above + up to 3 below (matching HTML tool logic)
+  // Display strategy: all in-range + up to 5 above (closest to range) + up to 3 below (closest to range)
+  // candidates are sorted HIGH→LOW, so:
+  //   aboveRange.slice(-5)  = last 5 = LOWEST above-range = closest to target from above  ✓
+  //   belowRange.slice(0,3) = first 3 = HIGHEST below-range = closest to target from below ✓
   const inRange    = g.candidates.filter(c => c.checks?.inRange);
-  const aboveRange = g.candidates.filter(c => c.strike > g.targetHighStrike).slice(0, 5);
-  const belowRange = g.candidates.filter(c => c.strike < g.targetLowStrike).slice(0, 3);
+  const aboveRange = g.candidates.filter(c => (c.strike ?? 0) > g.targetHighStrike).slice(-5);
+  const belowRange = g.candidates.filter(c => (c.strike ?? 0) < g.targetLowStrike).slice(0, 3);
   const displaySet = new Set([...aboveRange, ...inRange, ...belowRange].map(c => c.strike));
   const displayCands = g.candidates.filter(c => displaySet.has(c.strike));
 

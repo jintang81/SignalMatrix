@@ -389,6 +389,7 @@ export async function analyzeTicker(
       const yfOpts2 = await fetchYfOptions(ticker, chosen.expTimestamp);
       yfChain = yfOpts2.yfPuts;
       if (atmIV == null) atmIV = yfOpts2.atmIV;
+      console.log(`[SellPut] ${ticker} YF chain: ${yfChain.length} puts | exp=${chosenExpDate} (ts=${chosen.expTimestamp}) | atmIV=${atmIV?.toFixed(3)}`);
     }
 
     // Final IV fallback
@@ -411,26 +412,36 @@ export async function analyzeTicker(
       } catch { /* ok — will use YF chain only */ }
 
       if (yfChain.length > 0) {
-        // Merge: YF is the base (all strikes), Tradier supplements Greeks
+        // Merge: YF is the base (all strikes), Tradier supplements Greeks.
+        // IMPORTANT: Tradier returns bid=0.0 (not null) for inactive markets.
+        // `??` checks null/undefined only — it would keep Tradier's 0.0 and discard
+        // YF's valid bid. Instead: only use Tradier's bid/ask if it's actually > 0.
         const tradierByStrike = new Map(tradierPuts.map(p => [+(p.strike), p]));
         puts = yfChain.map(yp => {
           const tradier = tradierByStrike.get(yp.strike);
+          const tradierBid = tradier?.bid != null && (tradier.bid as number) > 0 ? tradier.bid as number : null;
+          const tradierAsk = tradier?.ask != null && (tradier.ask as number) > 0 ? tradier.ask as number : null;
           return {
             strike: yp.strike,
-            bid: tradier?.bid ?? yp.bid,
-            ask: tradier?.ask ?? yp.ask,
-            last: tradier?.last ?? yp.last,
-            volume: tradier?.volume ?? yp.volume,
+            bid:          tradierBid  ?? yp.bid,
+            ask:          tradierAsk  ?? yp.ask,
+            last:         tradier?.last ?? yp.last,
+            volume:       tradier?.volume ?? yp.volume,
             open_interest: tradier?.open_interest ?? yp.open_interest,
-            iv: tradier?.iv ?? yp.iv,
-            greeks: tradier?.greeks ?? null,
-            expiration: chosenExpDate,
+            iv:           tradier?.iv ?? yp.iv,
+            greeks:       tradier?.greeks ?? null,
+            expiration:   chosenExpDate,
           } as PutContract;
         });
       } else if (tradierPuts.length > 0) {
         puts = tradierPuts;
+        console.log(`[SellPut] ${ticker} using Tradier-only chain: ${puts.length} puts (YF chain empty)`);
       } else {
         puts = generateMockPuts(currentPrice, atmIV, chosenDTE);
+        console.log(`[SellPut] ${ticker} using mock puts (both YF and Tradier empty)`);
+      }
+      if (yfChain.length > 0) {
+        console.log(`[SellPut] ${ticker} merged chain: ${puts.length} puts | tradier provided: ${tradierPuts.length}`);
       }
     }
 
