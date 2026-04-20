@@ -93,15 +93,31 @@ export default function SellPutTable({ results, selected, onSelect }: Props) {
     return sortAsc ? diff : -diff;
   });
 
-  function Th({ col, label }: { col: Column; label: string }) {
+  function Th({ col, label, tooltip }: { col: Column; label: string; tooltip?: string }) {
     const active = sortCol === col;
     return (
       <th
         onClick={() => handleSort(col)}
         className="px-2 py-1.5 text-left text-[9px] tracking-widest text-muted/50 cursor-pointer hover:text-muted/80 whitespace-nowrap select-none"
       >
-        {label}
-        {active && <span className="ml-0.5">{sortAsc ? "↑" : "↓"}</span>}
+        <span className="inline-flex items-center gap-1">
+          {label}
+          {active && <span>{sortAsc ? "↑" : "↓"}</span>}
+          {tooltip && (
+            <span
+              className="relative group/tip"
+              onClick={e => e.stopPropagation()}
+            >
+              <span className="inline-flex items-center justify-center w-3.5 h-3.5 rounded-full text-[8px] leading-none border border-muted/30 text-muted/50 hover:text-txt hover:border-muted/60 cursor-default">
+                ?
+              </span>
+              <span className="pointer-events-none absolute bottom-full left-1/2 -translate-x-1/2 mb-1.5 z-50 hidden group-hover/tip:block w-56 rounded border border-border bg-bg-3 p-2 text-[10px] font-trading text-muted/80 leading-relaxed shadow-lg whitespace-normal">
+                {tooltip}
+                <span className="absolute top-full left-1/2 -translate-x-1/2 border-4 border-transparent border-t-border" />
+              </span>
+            </span>
+          )}
+        </span>
       </th>
     );
   }
@@ -112,14 +128,14 @@ export default function SellPutTable({ results, selected, onSelect }: Props) {
         <thead>
           <tr className="border-b border-border/40">
             <Th col="ticker"     label="TICKER" />
-            <Th col="score"      label="SCORE" />
+            <Th col="score"      label="SCORE" tooltip="综合开仓时机评分 0–100。由 G1 市场环境(40) + G2 事件日历(20) + G3 合约质量(25) + 风险反思(15) 构成。≥75 绿色可开仓；55–74 金色谨慎；40–54 橙色观望；<40 红色不建议。无合格合约时总分上限 35。" />
             <Th col="price"      label="PRICE" />
             <Th col="parentDist" label="VS MA200" />
             <Th col="atmIV"      label="IV" />
             <Th col="ivhv"       label="IV/HV" />
             <Th col="vix"        label="VIX" />
             <Th col="rsi"        label="RSI" />
-            <Th col="trend"      label="TREND" />
+            <Th col="trend"      label="TREND" tooltip="趋势强度（效率比）0–1。= 20日净移动 / Σ日振幅。>0.5 方向明确；0.3–0.5 温和趋势；<0.3 震荡盘整。值越高表示价格走势越有方向性。" />
             <Th col="g1"         label="G1" />
             <Th col="g2"         label="G2" />
           </tr>
