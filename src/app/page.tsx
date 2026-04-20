@@ -34,15 +34,20 @@ export default function Home() {
           </form>
         </section>
 
-        <Link href="/screeners/unusual-options" className="panel p-5 block hover:border-[#4f9cf9]/40 hover:bg-[#4f9cf9]/[0.02] transition-all duration-200">
-          <p className="text-sm tracking-[0.18em] mb-1" style={{ color: "#4f9cf9" }}>◈ OPTIONS FLOW</p>
-          <p className="text-xs text-muted/60 mb-3">扫描期权异常成交量，识别机构暗注方向与隐含看涨/看跌信号</p>
+        <section className="panel p-5">
+          <p className="text-sm tracking-[0.18em] mb-1" style={{ color: "#4f9cf9" }}>◈ OPTION SIGNALS</p>
+          <p className="text-xs text-muted/60 mb-3">期权异常信号与收益策略工具</p>
           <div className="flex flex-wrap gap-2">
-            {["异常成交量", "Put/Call 比率", "机构方向"].map((name) => (
-              <span key={name} className="tag tag-muted">{name}</span>
+            {[
+              { name: "异常期权信号", href: "/screeners/unusual-options" },
+              { name: "Sell Put",     href: "/screeners/sell-put" },
+            ].map(({ name, href }) => (
+              <Link key={name} href={href}>
+                <span className="tag tag-muted cursor-pointer hover:bg-[#4f9cf9]/15 transition-colors">{name}</span>
+              </Link>
             ))}
           </div>
-        </Link>
+        </section>
       </div>
 
       {/* ── Indicators ── */}
