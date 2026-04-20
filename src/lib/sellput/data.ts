@@ -80,37 +80,57 @@ export async function fetchSellPutChart(
   };
 }
 
-// ─── fetchYfOptions (ATM IV from Yahoo Finance) ────────────────────────────
+// ─── fetchYfOptions (ATM IV + full chain from Yahoo Finance) ─────────────────
+
+interface YfPut {
+  strike: number;
+  bid: number | null;
+  ask: number | null;
+  last: number | null;
+  iv: number | null;
+  open_interest: number;
+  volume: number;
+}
 
 export async function fetchYfOptions(
   ticker: string,
   expTimestamp?: number
-): Promise<{ atmIV: number | null; expirations: number[] }> {
+): Promise<{ atmIV: number | null; expirations: number[]; yfPuts: YfPut[] }> {
   try {
     const base = `${YF_BASE}/v7/finance/options/${ticker}`;
     const qs = expTimestamp ? `?date=${expTimestamp}` : "";
     const res = await fetch(`${CF_PROXY}${encodeURIComponent(base + qs)}`);
-    if (!res.ok) return { atmIV: null, expirations: [] };
+    if (!res.ok) return { atmIV: null, expirations: [], yfPuts: [] };
     const json = await res.json();
     const chain = json?.optionChain?.result?.[0];
-    if (!chain) return { atmIV: null, expirations: [] };
+    if (!chain) return { atmIV: null, expirations: [], yfPuts: [] };
 
     const expirations: number[] = chain.expirationDates ?? [];
     const price: number = chain.quote?.regularMarketPrice ?? 0;
 
-    if (!expTimestamp || !chain.options?.length) return { atmIV: null, expirations };
+    if (!expTimestamp || !chain.options?.length) return { atmIV: null, expirations, yfPuts: [] };
 
-    const puts: { strike: number; impliedVolatility: number }[] =
-      chain.options[0]?.puts ?? [];
-    if (!puts.length) return { atmIV: null, expirations };
+    const rawPuts: Array<Record<string, unknown>> = chain.options[0]?.puts ?? [];
+    if (!rawPuts.length) return { atmIV: null, expirations, yfPuts: [] };
 
-    // find the put closest to ATM
-    const atm = puts.reduce((best, p) =>
-      Math.abs(p.strike - price) < Math.abs(best.strike - price) ? p : best
+    // find the put closest to ATM for ATM IV
+    const atm = rawPuts.reduce((best: Record<string, unknown>, p: Record<string, unknown>) =>
+      Math.abs((p.strike as number) - price) < Math.abs((best.strike as number) - price) ? p : best
     );
-    return { atmIV: atm.impliedVolatility ?? null, expirations };
+
+    const yfPuts: YfPut[] = rawPuts.map(p => ({
+      strike: p.strike as number,
+      bid: (p.bid as number) ?? null,
+      ask: (p.ask as number) ?? null,
+      last: (p.lastPrice as number) ?? null,
+      iv: (p.impliedVolatility as number) ?? null,
+      open_interest: (p.openInterest as number) ?? 0,
+      volume: (p.volume as number) ?? 0,
+    }));
+
+    return { atmIV: (atm.impliedVolatility as number) ?? null, expirations, yfPuts };
   } catch {
-    return { atmIV: null, expirations: [] };
+    return { atmIV: null, expirations: [], yfPuts: [] };
   }
 }
 
@@ -366,10 +386,12 @@ export async function analyzeTicker(
     const chosenDTE    = chosen?.dte ?? Math.round((dteMin + dteMax) / 2);
     const chosenExpDate = chosen?.expDate ?? "";
 
-    // If we still have no ATM IV, try fetching with specific expiration
-    if (atmIV == null && chosen && dataSource !== "mock") {
+    // 7b. Fetch YF chain for the chosen expiration (comprehensive strikes from OPRA)
+    let yfChain: YfPut[] = [];
+    if (chosen && dataSource !== "mock") {
       const yfOpts2 = await fetchYfOptions(ticker, chosen.expTimestamp);
-      atmIV = yfOpts2.atmIV;
+      yfChain = yfOpts2.yfPuts;
+      if (atmIV == null) atmIV = yfOpts2.atmIV;
     }
 
     // Final IV fallback
@@ -378,14 +400,39 @@ export async function analyzeTicker(
     }
 
     // 8. Fetch options chain
+    // Backend mode: merge YF chain (complete OPRA strikes) + Tradier (real Greeks).
+    // YF is used as the base to ensure full strike coverage (Tradier sometimes
+    // omits strikes with zero OI, creating gaps in the target range).
     let puts: PutContract[] = [];
     if (dataSource === "mock") {
       puts = generateMockPuts(currentPrice, atmIV, chosenDTE);
     } else {
+      // Fetch Tradier chain for real Greeks
+      let tradierPuts: PutContract[] = [];
       try {
-        puts = await fetchBackendOptions(ticker, chosenExpDate);
-      } catch {
-        // Fall back to mock if backend fails
+        tradierPuts = await fetchBackendOptions(ticker, chosenExpDate);
+      } catch { /* ok — will use YF chain only */ }
+
+      if (yfChain.length > 0) {
+        // Merge: YF is the base (all strikes), Tradier supplements Greeks
+        const tradierByStrike = new Map(tradierPuts.map(p => [+(p.strike), p]));
+        puts = yfChain.map(yp => {
+          const tradier = tradierByStrike.get(yp.strike);
+          return {
+            strike: yp.strike,
+            bid: tradier?.bid ?? yp.bid,
+            ask: tradier?.ask ?? yp.ask,
+            last: tradier?.last ?? yp.last,
+            volume: tradier?.volume ?? yp.volume,
+            open_interest: tradier?.open_interest ?? yp.open_interest,
+            iv: tradier?.iv ?? yp.iv,
+            greeks: tradier?.greeks ?? null,
+            expiration: chosenExpDate,
+          } as PutContract;
+        });
+      } else if (tradierPuts.length > 0) {
+        puts = tradierPuts;
+      } else {
         puts = generateMockPuts(currentPrice, atmIV, chosenDTE);
       }
     }
