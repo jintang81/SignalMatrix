@@ -179,15 +179,15 @@ export async function fetchValuation(ticker: string): Promise<ValuationData> {
     // fall through to CF Worker fallback
   }
 
-  // fallback: Yahoo Finance via CF Worker proxy
-  // Uses quoteSummary for P/E + timeseries for annual EPS
+  // fallback: Yahoo Finance quoteSummary via CF Worker proxy (single reliable call)
+  // modules=defaultKeyStatistics,summaryDetail  → P/E ratios
+  // modules=incomeStatementHistory              → annual diluted EPS history
   try {
     let forwardPE: number | null = null;
     let trailingPE: number | null = null;
     const annualEpsArr: { date: string; eps: number }[] = [];
 
-    // 1. P/E from quoteSummary (reliable via CF proxy)
-    const summaryUrl = `${YF_BASE}/v10/finance/quoteSummary/${ticker}?modules=defaultKeyStatistics,summaryDetail`;
+    const summaryUrl = `${YF_BASE}/v10/finance/quoteSummary/${ticker}?modules=defaultKeyStatistics,summaryDetail,incomeStatementHistory`;
     const summaryRes = await fetch(`${CF_PROXY}${encodeURIComponent(summaryUrl)}`);
     if (summaryRes.ok) {
       const sj = await summaryRes.json();
@@ -196,22 +196,17 @@ export async function fetchValuation(ticker: string): Promise<ValuationData> {
       const sd = r0?.summaryDetail ?? {};
       forwardPE  = ks?.forwardPE?.raw  ?? sd?.forwardPE?.raw  ?? null;
       trailingPE = ks?.trailingPE?.raw ?? sd?.trailingPE?.raw ?? null;
-    }
 
-    // 2. Annual EPS from fundamentals-timeseries
-    const tsUrl = `${YF_BASE}/ws/fundamentals-timeseries/v1/finance/timeseries/${ticker}?type=annualDilutedEPS&period1=1262304000&period2=${Math.floor(Date.now() / 1000)}`;
-    const tsRes = await fetch(`${CF_PROXY}${encodeURIComponent(tsUrl)}`);
-    if (tsRes.ok) {
-      const tsJson = await tsRes.json();
-      for (const series of tsJson?.timeseries?.result ?? []) {
-        // Yahoo returns type in series.meta.type[] array
-        const typeArr = (series?.meta?.type ?? []) as string[];
-        if (typeArr.includes("annualDilutedEPS")) {
-          for (const pt of series.annualDilutedEPS ?? []) {
-            if (pt?.asOfDate && pt?.reportedValue?.raw != null) {
-              annualEpsArr.push({ date: pt.asOfDate, eps: pt.reportedValue.raw });
-            }
-          }
+      // Annual EPS from income statement history
+      const stmts = (r0?.incomeStatementHistory?.incomeStatementHistory ?? []) as Array<{
+        endDate?: { raw?: number };
+        dilutedEps?: { raw?: number };
+      }>;
+      for (const stmt of stmts) {
+        const ts = stmt?.endDate?.raw;
+        const eps = stmt?.dilutedEps?.raw;
+        if (ts != null && eps != null && eps > 0) {
+          annualEpsArr.push({ date: new Date(ts * 1000).toISOString().slice(0, 10), eps });
         }
       }
     }
