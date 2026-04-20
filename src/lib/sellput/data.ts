@@ -163,49 +163,54 @@ export async function fetchValuation(ticker: string): Promise<ValuationData> {
     if (res.ok) {
       const json = await res.json();
       // Backend returns { ticker, forward_pe, trailing_pe, annual_eps, data_source, fetched_at }
-      // — no `ok` field. Construct ValuationData manually.
+      // — no `ok` field. Only use if backend actually has data; otherwise fall through
+      // to CF Worker fallback (Yahoo Finance may block Render server-side requests).
       if (json?.ticker) {
         const annualEps = (json.annual_eps ?? []) as ValuationData["annual_eps"];
         const forwardPE = (json.forward_pe ?? null) as number | null;
         const trailingPE = (json.trailing_pe ?? null) as number | null;
-        return {
-          ticker: json.ticker,
-          forward_pe: forwardPE,
-          trailing_pe: trailingPE,
-          annual_eps: annualEps,
-          ok: annualEps.length > 0 || forwardPE != null || trailingPE != null,
-        };
+        if (annualEps.length > 0 || forwardPE != null || trailingPE != null) {
+          return { ticker: json.ticker, forward_pe: forwardPE, trailing_pe: trailingPE, annual_eps: annualEps, ok: true };
+        }
+        // Backend returned empty data — fall through to CF Worker fallback
       }
     }
   } catch {
-    // fall through to Yahoo Finance direct
+    // fall through to CF Worker fallback
   }
 
-  // fallback: Yahoo Finance fundamentals-timeseries
+  // fallback: Yahoo Finance via CF Worker proxy
+  // Uses quoteSummary for P/E + timeseries for annual EPS
   try {
-    const url = `${YF_BASE}/ws/fundamentals-timeseries/v1/finance/timeseries/${ticker}?type=annualEps,trailingPE,forwardPE&period1=1262304000&period2=${Math.floor(Date.now() / 1000)}`;
-    const res = await fetch(`${CF_PROXY}${encodeURIComponent(url)}`);
-    if (!res.ok) return { ticker, forward_pe: null, trailing_pe: null, annual_eps: [], ok: false };
-    const json = await res.json();
-    const ts = json?.timeseries?.result ?? [];
-
     let forwardPE: number | null = null;
     let trailingPE: number | null = null;
     const annualEpsArr: { date: string; eps: number }[] = [];
 
-    for (const series of ts) {
-      if (series.type === "trailingPE") {
-        const last = series.trailingPE?.at(-1);
-        if (last?.reportedValue?.raw) trailingPE = last.reportedValue.raw;
-      }
-      if (series.type === "forwardPE") {
-        const last = series.forwardPE?.at(-1);
-        if (last?.reportedValue?.raw) forwardPE = last.reportedValue.raw;
-      }
-      if (series.type === "annualEps") {
-        for (const pt of series.annualEps ?? []) {
-          if (pt?.asOfDate && pt?.reportedValue?.raw != null) {
-            annualEpsArr.push({ date: pt.asOfDate, eps: pt.reportedValue.raw });
+    // 1. P/E from quoteSummary (reliable via CF proxy)
+    const summaryUrl = `${YF_BASE}/v10/finance/quoteSummary/${ticker}?modules=defaultKeyStatistics,summaryDetail`;
+    const summaryRes = await fetch(`${CF_PROXY}${encodeURIComponent(summaryUrl)}`);
+    if (summaryRes.ok) {
+      const sj = await summaryRes.json();
+      const r0 = (sj?.quoteSummary?.result ?? [{}])[0] ?? {};
+      const ks = r0?.defaultKeyStatistics ?? {};
+      const sd = r0?.summaryDetail ?? {};
+      forwardPE  = ks?.forwardPE?.raw  ?? sd?.forwardPE?.raw  ?? null;
+      trailingPE = ks?.trailingPE?.raw ?? sd?.trailingPE?.raw ?? null;
+    }
+
+    // 2. Annual EPS from fundamentals-timeseries
+    const tsUrl = `${YF_BASE}/ws/fundamentals-timeseries/v1/finance/timeseries/${ticker}?type=annualDilutedEPS&period1=1262304000&period2=${Math.floor(Date.now() / 1000)}`;
+    const tsRes = await fetch(`${CF_PROXY}${encodeURIComponent(tsUrl)}`);
+    if (tsRes.ok) {
+      const tsJson = await tsRes.json();
+      for (const series of tsJson?.timeseries?.result ?? []) {
+        // Yahoo returns type in series.meta.type[] array
+        const typeArr = (series?.meta?.type ?? []) as string[];
+        if (typeArr.includes("annualDilutedEPS")) {
+          for (const pt of series.annualDilutedEPS ?? []) {
+            if (pt?.asOfDate && pt?.reportedValue?.raw != null) {
+              annualEpsArr.push({ date: pt.asOfDate, eps: pt.reportedValue.raw });
+            }
           }
         }
       }
@@ -216,7 +221,7 @@ export async function fetchValuation(ticker: string): Promise<ValuationData> {
       forward_pe: forwardPE,
       trailing_pe: trailingPE,
       annual_eps: annualEpsArr,
-      ok: annualEpsArr.length > 0,
+      ok: annualEpsArr.length > 0 || forwardPE != null || trailingPE != null,
     };
   } catch {
     return { ticker, forward_pe: null, trailing_pe: null, annual_eps: [], ok: false };
