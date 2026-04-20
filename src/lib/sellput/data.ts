@@ -127,8 +127,8 @@ export async function fetchBackendOptions(
   });
   if (!res.ok) throw new Error(`Backend options failed: ${res.status}`);
   const json = await res.json();
-  // Backend returns { options: PutContract[], expiration: string, ... }
-  return (json?.options ?? []) as PutContract[];
+  // Backend returns { chain: { puts: PutContract[] }, expiration: string, ... }
+  return (json?.chain?.puts ?? []) as PutContract[];
 }
 
 // ─── fetchEarningsDate ────────────────────────────────────────────────────
