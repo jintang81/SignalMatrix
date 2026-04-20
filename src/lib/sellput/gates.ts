@@ -583,7 +583,32 @@ export function runRiskReflections(params: {
 }
 
 // ─── Composite scoring ────────────────────────────────────────────────────
-
+//
+// 综合评分 (0–100)：衡量当前 ticker 的 Sell Put 开仓时机质量。
+// 不是"买入信号"，而是"此刻开仓条件有多成熟"的综合度量。
+//
+// 评分结构（满分 100）：
+//
+//   第一关·市场环境  40分  Gate1 全部 6 项检查（VIX水平/趋势、RSI、IV/HV、均线距离、趋势强度）
+//                         全通过得满分；任一不通过得 0 分（一票否决逻辑）
+//
+//   第二关·事件日历  20分  持仓期窗口内重大事件扣分：
+//                         · 财报日（blocker）−10分/个
+//                         · 宏观事件（blocker）−2分/个
+//                         · OTM 加宽事件（detail）−2分/个
+//                         下限 0 分
+//
+//   第三关·合约筛选  25分  最佳候选合约满足的条件数 / 7 × 25（7 = 全部合约检查项）
+//                         无合格候选合约时得 0 分，且总分上限强制 ≤ 35
+//
+//   风险反思扣分    15分  15 − Σ扣分（bad反思 −5/个, warn −2/个），上限扣 15 分
+//
+// 使用方式：
+//   ≥ 75（绿）：条件成熟，可正常开仓
+//   55–74（金）：条件尚可，降低张数或等待更好时机
+//   40–54（橙）：条件不佳，建议观望
+//   < 40（红）：不建议开仓，主要关口未通过或风险过高
+//
 export function calcCompositeScore(params: {
   gate1: Gate1Result;
   gate2: Gate2Result;
@@ -626,6 +651,7 @@ export function calcCompositeScore(params: {
 
   const noCandidate = !gate3.bestCandidate;
   if (noCandidate) {
+    // 无合格合约时评分上限 35，表示市场环境再好也无法执行
     score = Math.min(score, 35);
     breakdown.push({ name: "⚠️ 无合格候选合约（总分上限35）", max: 0 as number | string, val: "✗" });
   }

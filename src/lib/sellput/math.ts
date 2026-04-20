@@ -81,7 +81,25 @@ export function calcIVRank(currentIV: number, closes: number[]): number | null {
 }
 
 // ─── Trend strength ───────────────────────────────────────────────────────
-
+//
+// 趋势强度 (Trend Efficiency Ratio)，范围 0–1。
+//
+// 算法：取最近 period 根 K线（默认 20 根），
+//   Trend = |净移动| / Σ|每日振幅|
+//         = |close[N] - close[N-period]| / Σ|close[i] - close[i-1]|
+//
+// 直觉理解：
+//   · 1.0 = 完美单向直线上涨/下跌（每天都同向，无反复）
+//   · 0.0 = 完全震荡横盘（每天涨跌相互抵消，净移动≈0）
+//   · 典型值：趋势行情 0.4–0.7，强趋势 > 0.7，震荡 < 0.3
+//
+// 在 Sell Put 策略中的含义：
+//   · 趋势强度高（> 0.5）= 标的正在单向运动，方向性明确，
+//     对于 Sell Put 来说，若同时是上升趋势则有利（卖方赚权利金的概率更高）
+//   · 趋势强度低（< 0.3）= 震荡盘整，价格无序，
+//     Sell Put 仍可操作，但需更宽的 OTM 以应对随机波动
+//   · Gate1 中此指标作为市场环境评估的参考项之一
+//
 export function calcTrendStrength(closes: number[], period = 20): number | null {
   if (closes.length < period + 1) return null;
   const start = closes[closes.length - period - 1];
