@@ -219,53 +219,77 @@ function Gate1Panel({ g }: { g: Gate1Result }) {
 
 // ─── Gate 2 ───────────────────────────────────────────────────────────────
 
-function Gate2Panel({ g }: { g: Gate2Result }) {
-  const pass = !g.hasBlocker;
+function Gate2Panel({ g, expDate }: { g: Gate2Result; expDate: string }) {
   return (
     <div className="panel p-3">
-      <SectionHeader
-        num="G2"
-        title="事件日历 · Event Calendar"
-        pass={pass}
-        color="#a78bfa"
-      />
+      {/* Header */}
+      <div className="flex items-center gap-2 mb-2">
+        <span className="text-[10px] font-trading px-1.5 py-0.5 rounded border" style={{ borderColor: "#a78bfa50", color: "#a78bfa" }}>G2</span>
+        <span className="text-[11px] tracking-wider text-txt/80">事件日历 ({expDate} 前)</span>
+        {g.hasBlocker
+          ? <span className="tag tag-bad text-[9px] ml-auto">今日禁建仓</span>
+          : g.totalOTM > 0
+          ? <span className="tag tag-warn text-[9px] ml-auto">OTM +{g.totalOTM}%</span>
+          : <span className="tag tag-ok text-[9px] ml-auto">今日可开仓</span>}
+      </div>
+      <p className="text-[9px] text-muted/50 mb-2">OTM 调整取最大值 (不叠加), 上限 +4%</p>
 
-      {g.blockers.length > 0 && (
+      {/* Explanation notice */}
+      <div className="rounded border px-2.5 py-2 mb-2 text-[9px]" style={{ background: "rgba(96,165,250,0.06)", borderColor: "rgba(96,165,250,0.25)", color: "#60a5fa" }}>
+        <p className="font-bold mb-1">两类规则，检查窗口不同</p>
+        <p className="text-muted/60 leading-relaxed">
+          · <strong className="text-bear">禁建仓 (Blocker)</strong>：只看今天是否处于 NVDA/父资产财报 ±1日，或 CPI/PCE/非农 发布日 —— 只限制今天开新仓。<br />
+          · <strong className="text-gold">OTM 加宽</strong>：看整个今天→到期日窗口内是否有重大事件 —— 持仓期内有大事件就应该把行权价推得更远留出缓冲。
+        </p>
+      </div>
+
+      {/* Blocker status */}
+      {g.blockers.length > 0 ? (
         <div className="mb-2 space-y-1">
           {g.blockers.map((b, i) => (
-            <div key={i} className="flex items-center gap-2 text-[10px]">
-              <span className="tag tag-bad text-[9px]">阻断</span>
-              <span className="font-trading text-bear/80">{b.date}</span>
-              <span className="text-muted/60">{b.msg}</span>
+            <div key={i} className="rounded border px-2.5 py-1.5 text-[10px]" style={{ background: "rgba(255,23,68,0.06)", borderColor: "rgba(255,23,68,0.25)" }}>
+              <span className="text-bear font-bold">{b.date}</span>
+              <span className="text-muted/60 ml-2">{b.msg}</span>
             </div>
           ))}
         </div>
+      ) : (
+        <div className="rounded border px-2.5 py-1.5 mb-2 text-[10px]" style={{ background: "rgba(0,230,118,0.06)", borderColor: "rgba(0,230,118,0.25)", color: "#00e676" }}>
+          ✓ 今天不处于任何禁建仓时间点，可以开新仓
+        </div>
       )}
 
+      {/* OTM events */}
       {g.details.length > 0 && (
-        <div className="space-y-1">
-          {g.details.map((d, i) => (
-            <div key={i} className="flex items-center gap-2 text-[10px]">
-              <span className="tag tag-warn text-[9px]">事件</span>
-              <span className="font-trading text-muted/60">{d.date}</span>
-              <span className="text-muted/70">{d.label}</span>
-              {d.boost > 0 && (
-                <span className="text-gold/60">+{(d.boost * 100).toFixed(0)}% OTM</span>
-              )}
-            </div>
-          ))}
-        </div>
-      )}
-
-      {g.totalOTM > 0 && (
-        <div className="mt-2 text-[10px] font-trading">
-          <span className="text-muted/50">事件 OTM 附加: </span>
-          <span className="text-gold">{(g.totalOTM * 100).toFixed(1)}%</span>
-        </div>
+        <>
+          <p className="text-[10px] text-txt/70 font-bold mb-1.5">持仓期内 OTM 加宽事件 (影响行权价选择)</p>
+          <div className="flex flex-wrap gap-1 mb-2">
+            {g.details.map((d, i) => (
+              <span
+                key={i}
+                className="text-[9px] font-trading px-1.5 py-0.5 rounded border"
+                style={{
+                  background: "var(--color-bg-3)",
+                  borderColor: d.type === "earn" ? "rgba(96,165,250,0.4)" : "rgba(167,139,250,0.4)",
+                  color: d.type === "earn" ? "#60a5fa" : "#a78bfa",
+                }}
+              >
+                {d.date} · {d.label} (+{d.boost}%)
+              </span>
+            ))}
+          </div>
+        </>
       )}
 
       {g.details.length === 0 && g.blockers.length === 0 && (
-        <p className="text-[10px] text-muted/40">到期日前无已知重大事件</p>
+        <p className="text-[10px] text-muted/40">到期日窗口内无已知 OTM 加宽事件</p>
+      )}
+
+      {/* Resonance warning */}
+      {g.resonanceDates?.length > 0 && (
+        <div className="rounded border px-2.5 py-1.5 text-[10px]" style={{ background: "rgba(255,23,68,0.06)", borderColor: "rgba(255,23,68,0.25)", color: "#ef5350" }}>
+          🚨 事件共振警告: {g.resonanceDates[0].date} 单日叠加了 {g.resonanceDates[0].count} 个高风险事件。&quot;取最大值&quot;规则可能低估三事件叠加的共振冲击，建议当日提前平仓或滚仓，而非只调整 OTM 距离。
+        </div>
       )}
     </div>
   );
@@ -501,7 +525,7 @@ export default function SellPutDetail({ result }: { result: AnalysisResult }) {
       <DetailHeader r={result} />
       <Gate0Panel g={result.gate0} />
       <Gate1Panel g={result.gate1} />
-      <Gate2Panel g={result.gate2} />
+      <Gate2Panel g={result.gate2} expDate={result.chosenExpDate} />
       <Gate3Panel g={result.gate3} />
       {result.gate4 && <Gate4Panel g={result.gate4} />}
       {result.gate5 && <Gate5Panel g={result.gate5} />}
