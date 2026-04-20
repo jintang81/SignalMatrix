@@ -488,7 +488,7 @@ export function runGate5(params: {
   if (!contract) return null;
   const premium = contract.mid ?? 0;
   const profitClosePrice = premium * 0.5;
-  const stopLossPrice = premium * 3.0;
+  const stopLossPrice = premium * 2.0;
 
   return {
     rules: [
@@ -501,8 +501,8 @@ export function runGate5(params: {
       },
       {
         num: "规则二",
-        title: "亏损 2x 止损 (GTC)",
-        trigger: `合约市价 ≥ $${stopLossPrice.toFixed(2)}（权利金×300%）`,
+        title: "亏损 1x 止损 (GTC)",
+        trigger: `合约市价 ≥ $${stopLossPrice.toFixed(2)}（权利金×200%）`,
         action: "开仓时同步挂 GTC 买入平仓单",
         type: "warn",
       },
