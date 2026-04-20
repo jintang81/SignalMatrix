@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { fmt, fmtPct, fmtSignedPct } from "@/lib/sellput/math";
 import type { AnalysisError, AnalysisResult } from "@/lib/sellput/types";
 
@@ -61,6 +61,14 @@ function gateLabel(pass: boolean, count?: number, total?: number): React.ReactNo
 export default function SellPutTable({ results, selected, onSelect }: Props) {
   const [sortCol, setSortCol] = useState<Column>("score");
   const [sortAsc, setSortAsc] = useState(false);
+  const [activeTip, setActiveTip] = useState<{ text: string; x: number; y: number } | null>(null);
+
+  useEffect(() => {
+    if (!activeTip) return;
+    function close() { setActiveTip(null); }
+    document.addEventListener("click", close);
+    return () => document.removeEventListener("click", close);
+  }, [activeTip]);
 
   const tickers = Object.keys(results);
   if (!tickers.length) return null;
@@ -105,16 +113,16 @@ export default function SellPutTable({ results, selected, onSelect }: Props) {
           {active && <span>{sortAsc ? "↑" : "↓"}</span>}
           {tooltip && (
             <span
-              className="relative group/tip"
-              onClick={e => e.stopPropagation()}
+              className="inline-flex items-center justify-center w-3.5 h-3.5 rounded-full text-[8px] leading-none border border-muted/30 text-muted/50 hover:text-gold hover:border-gold/60 cursor-pointer"
+              onClick={e => {
+                e.stopPropagation();
+                const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
+                setActiveTip(t =>
+                  t?.text === tooltip ? null : { text: tooltip, x: rect.left + rect.width / 2, y: rect.bottom + 8 }
+                );
+              }}
             >
-              <span className="inline-flex items-center justify-center w-3.5 h-3.5 rounded-full text-[8px] leading-none border border-muted/30 text-muted/50 hover:text-txt hover:border-muted/60 cursor-default">
-                ?
-              </span>
-              <span className="pointer-events-none absolute bottom-full left-1/2 -translate-x-1/2 mb-1.5 z-50 hidden group-hover/tip:block w-56 rounded border border-border bg-bg-3 p-2 text-[10px] font-trading text-muted/80 leading-relaxed shadow-lg whitespace-normal">
-                {tooltip}
-                <span className="absolute top-full left-1/2 -translate-x-1/2 border-4 border-transparent border-t-border" />
-              </span>
+              ?
             </span>
           )}
         </span>
@@ -123,6 +131,7 @@ export default function SellPutTable({ results, selected, onSelect }: Props) {
   }
 
   return (
+    <>
     <div className="panel overflow-x-auto">
       <table className="w-full font-trading text-xs min-w-[640px]">
         <thead>
@@ -248,5 +257,17 @@ export default function SellPutTable({ results, selected, onSelect }: Props) {
         </tbody>
       </table>
     </div>
+
+    {/* Fixed-position tooltip — renders outside overflow-x-auto container */}
+    {activeTip && (
+      <div
+        className="fixed z-50 w-60 rounded border border-border bg-bg-3 p-2.5 text-[10px] font-trading text-txt/80 leading-relaxed shadow-xl"
+        style={{ left: activeTip.x, top: activeTip.y, transform: "translateX(-50%)" }}
+        onClick={e => e.stopPropagation()}
+      >
+        {activeTip.text}
+      </div>
+    )}
+    </>
   );
 }
