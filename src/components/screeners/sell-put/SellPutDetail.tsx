@@ -192,17 +192,18 @@ function Gate1Panel({ g }: { g: Gate1Result }) {
         </span>
       </div>
       <p className="text-[9px] text-muted/50 mb-2">目标: 确认当前环境对卖方基本安全。过关只代表可以继续，不代表这是特别好的时机。</p>
-      <div className="space-y-1">
+      <div className="space-y-1.5">
         {g.items.map(item => {
           const sym = item.pass ? "✓" : item.critical ? "✗" : "⚠";
-          const symColor = item.pass ? "#00e676" : item.critical ? "#ef5350" : "#f0cc6e";
-          const nameColor = item.pass ? "#00e676" : item.critical ? "#ef5350" : "#f0cc6e";
+          const clr = item.pass ? "#00e676" : item.critical ? "#ef5350" : "#f0cc6e";
           return (
             <div key={item.name}>
               <div className="flex items-baseline gap-2">
-                <span className="text-[11px]" style={{ color: symColor }}>{sym}</span>
-                <span className="text-[11px] font-trading" style={{ color: nameColor }}>{item.name}</span>
+                <span className="text-[11px]" style={{ color: clr }}>{sym}</span>
+                <span className="text-[11px] font-trading" style={{ color: clr }}>{item.name}</span>
+                <span className="text-[9px] text-muted/40">{item.rule}</span>
               </div>
+              <div className="ml-5 text-[10px] font-trading" style={{ color: clr }}>{item.value}</div>
               {item.note && (
                 <div className="ml-5 text-[10px] text-muted/50 italic mt-0.5">
                   <span className="mr-1">💡</span>{item.note}
