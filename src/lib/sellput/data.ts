@@ -370,14 +370,10 @@ export async function analyzeTicker(
         Math.floor((now + d * 86400000) / 1000)
       );
     } else {
-      // Use Tradier's own expiration list — this ensures the chosen date
-      // actually exists in the Tradier chain (avoids sparse-strike weekly
-      // expirations that Yahoo Finance might return instead).
-      const [tradierExps, yfOpts] = await Promise.all([
-        fetchBackendExpirations(ticker),
-        fetchYfOptions(ticker),
-      ]);
-      expirationTimestamps = tradierExps.length > 0 ? tradierExps : yfOpts.expirations;
+      // Use YF expirations — their timestamps are required to correctly query
+      // the YF chain in step 7b (Tradier-derived timestamps won't match YF's API).
+      const yfOpts = await fetchYfOptions(ticker);
+      expirationTimestamps = yfOpts.expirations;
       atmIV = yfOpts.atmIV;
     }
 
@@ -386,7 +382,8 @@ export async function analyzeTicker(
     const chosenDTE    = chosen?.dte ?? Math.round((dteMin + dteMax) / 2);
     const chosenExpDate = chosen?.expDate ?? "";
 
-    // 7b. Fetch YF chain for the chosen expiration (comprehensive strikes from OPRA)
+    // 7b. Fetch YF chain for the chosen expiration (comprehensive OPRA strikes).
+    // chosen.expTimestamp is from YF so the ?date= query works correctly.
     let yfChain: YfPut[] = [];
     if (chosen && dataSource !== "mock") {
       const yfOpts2 = await fetchYfOptions(ticker, chosen.expTimestamp);
