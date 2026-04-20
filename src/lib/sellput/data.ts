@@ -166,9 +166,29 @@ export async function fetchValuation(ticker: string, currentPrice?: number): Pro
       // — no `ok` field. Only use if backend actually has data; otherwise fall through
       // to CF Worker fallback (Yahoo Finance may block Render server-side requests).
       if (json?.ticker) {
-        const annualEps = (json.annual_eps ?? []) as ValuationData["annual_eps"];
-        const forwardPE = (json.forward_pe ?? null) as number | null;
-        const trailingPE = (json.trailing_pe ?? null) as number | null;
+        let annualEps = (json.annual_eps ?? []) as ValuationData["annual_eps"];
+        let forwardPE = (json.forward_pe ?? null) as number | null;
+        let trailingPE = (json.trailing_pe ?? null) as number | null;
+
+        // If backend has some data but missing forward P/E, try CF Worker earningsTrend to supplement
+        if (forwardPE == null && currentPrice && currentPrice > 0) {
+          try {
+            const etUrl = `${YF_BASE}/v10/finance/quoteSummary/${ticker}?modules=earningsTrend`;
+            const etRes = await fetch(`${CF_PROXY}${encodeURIComponent(etUrl)}`);
+            if (etRes.ok) {
+              const etJson = await etRes.json();
+              const trends = ((etJson?.quoteSummary?.result ?? [{}])[0]?.earningsTrend?.trend ?? []) as Array<{
+                period?: string; earningsEstimate?: { avg?: { raw?: number } };
+              }>;
+              const fwdTrend = trends.find(t => t.period === "+1y") ?? trends.find(t => t.period === "0y");
+              const fwdEPS = fwdTrend?.earningsEstimate?.avg?.raw;
+              if (fwdEPS && fwdEPS > 0) {
+                forwardPE = Math.round((currentPrice / fwdEPS) * 10) / 10;
+              }
+            }
+          } catch { /* ignore */ }
+        }
+
         if (annualEps.length > 0 || forwardPE != null || trailingPE != null) {
           return { ticker: json.ticker, forward_pe: forwardPE, trailing_pe: trailingPE, annual_eps: annualEps, ok: true };
         }
