@@ -411,37 +411,42 @@ export async function analyzeTicker(
         tradierPuts = await fetchBackendOptions(ticker, chosenExpDate);
       } catch { /* ok — will use YF chain only */ }
 
-      if (yfChain.length > 0) {
-        // Merge: YF is the base (all strikes), Tradier supplements Greeks.
-        // IMPORTANT: Tradier returns bid=0.0 (not null) for inactive markets.
-        // `??` checks null/undefined only — it would keep Tradier's 0.0 and discard
-        // YF's valid bid. Instead: only use Tradier's bid/ask if it's actually > 0.
-        const tradierByStrike = new Map(tradierPuts.map(p => [+(p.strike), p]));
-        puts = yfChain.map(yp => {
-          const tradier = tradierByStrike.get(yp.strike);
-          const tradierBid = tradier?.bid != null && (tradier.bid as number) > 0 ? tradier.bid as number : null;
-          const tradierAsk = tradier?.ask != null && (tradier.ask as number) > 0 ? tradier.ask as number : null;
+      if (yfChain.length > 0 || tradierPuts.length > 0) {
+        // UNION merge: include all strikes from both YF and Tradier.
+        // Neither source is a complete superset: Tradier often has more near-ATM
+        // strikes (e.g. 88 vs YF's 77 for SOXL) while YF may have deep-OTM ones.
+        // Using YF-only as base would silently drop Tradier-exclusive strikes,
+        // causing gaps when the target range falls on a Tradier-only strike.
+        //
+        // Tradier bid=0.0 convention: only use Tradier bid/ask when actually > 0;
+        // otherwise fall back to YF bid/ask (YF uses null for no-market, not 0).
+        const yfByStrike      = new Map(yfChain.map(p => [+(p.strike),      p]));
+        const tradierByStrike = new Map(tradierPuts.map(p => [+(p.strike),  p]));
+        const allStrikes = new Set([
+          ...yfChain.map(p => +(p.strike)),
+          ...tradierPuts.map(p => +(p.strike)),
+        ]);
+        puts = [...allStrikes].sort((a, b) => b - a).map(strike => {
+          const tradier     = tradierByStrike.get(strike);
+          const yf          = yfByStrike.get(strike);
+          const tradierBid  = tradier?.bid != null && (tradier.bid  as number) > 0 ? tradier.bid  as number : null;
+          const tradierAsk  = tradier?.ask != null && (tradier.ask  as number) > 0 ? tradier.ask  as number : null;
           return {
-            strike: yp.strike,
-            bid:          tradierBid  ?? yp.bid,
-            ask:          tradierAsk  ?? yp.ask,
-            last:         tradier?.last ?? yp.last,
-            volume:       tradier?.volume ?? yp.volume,
-            open_interest: tradier?.open_interest ?? yp.open_interest,
-            iv:           tradier?.iv ?? yp.iv,
-            greeks:       tradier?.greeks ?? null,
-            expiration:   chosenExpDate,
+            strike,
+            bid:           tradierBid            ?? yf?.bid            ?? null,
+            ask:           tradierAsk            ?? yf?.ask            ?? null,
+            last:          tradier?.last          ?? yf?.last           ?? null,
+            volume:        tradier?.volume        ?? yf?.volume         ?? 0,
+            open_interest: tradier?.open_interest ?? yf?.open_interest  ?? 0,
+            iv:            tradier?.iv            ?? yf?.iv             ?? null,
+            greeks:        tradier?.greeks        ?? null,
+            expiration:    chosenExpDate,
           } as PutContract;
         });
-      } else if (tradierPuts.length > 0) {
-        puts = tradierPuts;
-        console.log(`[SellPut] ${ticker} using Tradier-only chain: ${puts.length} puts (YF chain empty)`);
+        console.log(`[SellPut] ${ticker} union chain: ${puts.length} puts (YF:${yfChain.length} Tradier:${tradierPuts.length})`);
       } else {
         puts = generateMockPuts(currentPrice, atmIV, chosenDTE);
         console.log(`[SellPut] ${ticker} using mock puts (both YF and Tradier empty)`);
-      }
-      if (yfChain.length > 0) {
-        console.log(`[SellPut] ${ticker} merged chain: ${puts.length} puts | tradier provided: ${tradierPuts.length}`);
       }
     }
 
