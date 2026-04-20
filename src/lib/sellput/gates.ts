@@ -339,7 +339,8 @@ export function runGate3(params: {
       const costBasis = p.strike - mid;
       const strikeToLRSDist =
         p.strike > 0 ? (p.strike - estETFAtParentMA200) / p.strike : 0;
-      const bidAskSpread = bid != null && ask != null ? ask - bid : null;
+      // Treat bid=0 / ask=0 same as null: no active market, spread is meaningless
+      const bidAskSpread = bid != null && bid > 0 && ask != null && ask > 0 ? ask - bid : null;
       const bidAskSpreadPct = bidAskSpread != null && mid > 0 ? bidAskSpread / mid : null;
       const openInterest = +(p.open_interest ?? 0);
       return {
