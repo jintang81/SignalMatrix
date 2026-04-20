@@ -346,6 +346,16 @@ export async function analyzeTicker(
 
     // 10. Valuation (parent only — ETFs typically have no P/E)
     const valuation = await fetchValuation(parentTicker, parentPrice);
+    // Belt-and-suspenders: if Yahoo Finance P/E fields are still null but we have
+    // annual EPS, compute trailing P/E directly from parentPrice / recentAnnualEPS
+    if (valuation.ok && valuation.forward_pe == null && valuation.trailing_pe == null
+        && valuation.annual_eps.length > 0 && parentPrice > 0) {
+      const recentEPS = [...valuation.annual_eps]
+        .sort((a, b) => b.date.localeCompare(a.date))[0]?.eps;
+      if (recentEPS && recentEPS > 0) {
+        valuation.trailing_pe = Math.round((parentPrice / recentEPS) * 10) / 10;
+      }
+    }
 
     // 11. Computed metrics
     const hv = calcHV(etfData.closes, 20);
