@@ -293,7 +293,7 @@ def get_valuation(
     try:
         data = _yf_get(
             f"/v10/finance/quoteSummary/{ticker}",
-            {"modules": "defaultKeyStatistics,summaryDetail,earningsTrend"},
+            {"modules": "price,defaultKeyStatistics,summaryDetail,earningsTrend"},
         )
         r0 = (data.get("quoteSummary", {}).get("result") or [{}])[0]
         ks = r0.get("defaultKeyStatistics", {})
@@ -302,6 +302,24 @@ def get_valuation(
                               or (sd.get("forwardPE")  or {}).get("raw")
         result["trailing_pe"] = (ks.get("trailingPE") or {}).get("raw") \
                               or (sd.get("trailingPE") or {}).get("raw")
+
+        # Forward P/E from earningsTrend if not available from key stats
+        if not result["forward_pe"]:
+            pr = r0.get("price", {})
+            trends = r0.get("earningsTrend", {}).get("trend", [])
+            # Prefer "+1y" (next fiscal year), fallback to "0y" (current year)
+            fwd_eps = None
+            for period in ("+1y", "0y"):
+                for t in trends:
+                    if t.get("period") == period:
+                        fwd_eps = (t.get("earningsEstimate") or {}).get("avg", {}).get("raw")
+                        break
+                if fwd_eps:
+                    break
+            if fwd_eps and fwd_eps > 0:
+                price = (pr.get("regularMarketPrice") or {}).get("raw")
+                if price and price > 0:
+                    result["forward_pe"] = round(price / fwd_eps, 1)
     except Exception:
         pass
 
