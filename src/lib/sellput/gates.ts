@@ -379,14 +379,29 @@ export function runGate3(params: {
     const thetaOk =
       c.greeks != null && c.greeks.theta != null && Math.abs(c.greeks.theta) >= 0.03;
     const annualOk = (c.annualROI ?? 0) >= 0.12;
+    // bidAskSpreadPct threshold: 0.40 (40%) — OTM puts on leveraged ETFs
+    // routinely have 20-40% bid-ask spread; 10% was too tight.
     const liquidityOk =
       (c.openInterest ?? 0) >= 100 &&
-      (c.bidAskSpreadPct == null || c.bidAskSpreadPct < 0.1);
+      (c.bidAskSpreadPct == null || c.bidAskSpreadPct < 0.4);
     const lrsSafe = (c.strikeToLRSDist ?? 0) > 0.03;
     c.checks = { inRange, deltaOk, gammaOk, thetaOk, annualOk, liquidityOk, lrsSafe };
     c.qualifyCount = Object.values(c.checks).filter(Boolean).length;
   }
 
+  // Debug: log in-range candidates to console so we can see real OI / spread values
+  const inRangeCands = candidates.filter(c => c.checks?.inRange);
+  if (inRangeCands.length) {
+    console.log(`[G3] ${params.ticker} in-range candidates (${inRangeCands.length}):`,
+      inRangeCands.map(c => ({
+        strike: c.strike, OI: c.openInterest, bid: c.bid, ask: c.ask,
+        mid: c.mid?.toFixed(2), spreadPct: c.bidAskSpreadPct?.toFixed(3),
+        liquidityOk: c.checks?.liquidityOk,
+      }))
+    );
+  } else {
+    console.log(`[G3] ${params.ticker} NO in-range candidates. targetRange: $${params.expDateStr} | $${targetLowStrike.toFixed(2)}-$${targetHighStrike.toFixed(2)}`);
+  }
   const lrsSafeOnly = candidates.filter((c) => c.checks?.lrsSafe);
   const qualified = lrsSafeOnly.filter((c) => (c.qualifyCount ?? 0) >= 6);
   const bestCandidate =
