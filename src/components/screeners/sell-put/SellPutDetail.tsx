@@ -153,13 +153,13 @@ function Gate0Panel({ g }: { g: Gate0Result }) {
       {g.canEvaluate && (
         <div className="flex gap-4 text-[10px] font-trading flex-wrap">
           {g.currentPE != null && (
-            <span>当前 P/E ({g.peType === "forward" ? "FORWARD" : "TRAILING"}) <span className="text-txt">{fmt(g.currentPE, 1)}</span></span>
+            <span>当前 P/E ({g.peType === "forward" ? "FORWARD" : "TRAILING"}) <span style={{ color }}>{fmt(g.currentPE, 1)}</span></span>
           )}
           {g.medianPE != null && (
             <span>5年中位 <span className="text-txt">{fmt(g.medianPE, 1)}</span></span>
           )}
           {g.threshold13x != null && (
-            <span>13× <span className="text-txt">{fmt(g.threshold13x, 1)}</span></span>
+            <span>红线阈值 (1.3×) <span className="text-txt">{fmt(g.threshold13x, 1)}</span></span>
           )}
           {g.ratio != null && (
             <span>当前/中位 <span style={{ color }}>{fmt(g.ratio, 2)}×</span></span>
