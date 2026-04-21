@@ -5,7 +5,7 @@
   1. 盘中涨幅 ∈ [3%, 5%]
      使用 meta.regularMarketPrice（实时）vs meta.regularMarketPreviousClose（昨收）
      注意：3:40 PM 未收盘，不使用已完成的日线 close
-  2. 过去 20 个交易日中至少 1 天 close-to-close 涨幅 > 8%（有人气的强势股）
+  2. 过去 20 个交易日中至少 1 天 close-to-close 涨幅 > 5%（有人气的强势股）
   3. 量比 > 1
      volume_ratio = today_volume / (20日均量 × 0.949)
      0.949 = 6h10m / 6.5h，代表 3:40 PM 时已过 94.9% 的交易日
@@ -35,7 +35,7 @@ LOOKBACK_DAYS         = 60
 HIST_WIN              = 20       # 过去 20 个交易日（用于条件 2、3）
 MIN_PCT_GAIN          = 3.0      # 条件 1：涨幅下限
 MAX_PCT_GAIN          = 5.0      # 条件 1：涨幅上限
-SURGE_THRESH          = 8.0      # 条件 2：单日最大涨幅门槛
+SURGE_THRESH          = 5.0      # 条件 2：单日最大涨幅门槛
 VOL_RATIO_MIN         = 1.0      # 条件 3：量比门槛
 TURNOVER_MIN          = 5.0      # 条件 4：换手率下限（%）
 TURNOVER_MAX          = 10.0     # 条件 4：换手率上限（%）
@@ -263,7 +263,7 @@ def _screen_phase1(ticker: str):
     if not (MIN_PCT_GAIN <= pct_change <= MAX_PCT_GAIN):
         return None
 
-    # ── 条件 2：过去 20 个完整交易日中，至少 1 天 close-to-close > 8% ──
+    # ── 条件 2：过去 20 个完整交易日中，至少 1 天 close-to-close > 5% ──
     if len(rows) < HIST_WIN + 1:
         return None
     hist_rows = rows[-(HIST_WIN + 1):]  # 21 bars → 20 daily returns
