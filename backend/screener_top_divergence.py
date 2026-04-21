@@ -24,6 +24,7 @@ import requests
 from datetime import datetime, timedelta
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from zoneinfo import ZoneInfo
+from screener_volume import _AI_WATCHLIST
 import threading
 
 # ─────────────────────────────────────────────────────
@@ -609,7 +610,7 @@ def screen_ticker(ticker, verbose=False):
 
 def run_top_divergence_scan() -> dict:
     """供 FastAPI 后台任务调用的入口函数，返回完整扫描结果 dict。"""
-    tickers  = get_us_large_cap_tickers()
+    tickers  = list(set(get_us_large_cap_tickers()) | set(_AI_WATCHLIST))
     results  = []
     total    = len(tickers)
     lock     = threading.Lock()

@@ -68,48 +68,7 @@ def _proxy_url(path: str) -> str:
 
 
 # ─── 股票池（复用 screener_volume.py 的实现）─────────────────────────────
-from screener_volume import get_us_large_cap_tickers
-
-# AI 赛道自选股：芯片、算力、云 AI、数据中心、核能、电力、机器人等
-_AI_WATCHLIST = [
-    # 芯片 & 半导体设备
-    "NVDA", "AMD", "AVGO", "MRVL", "INTC", "QCOM", "TSM", "ASML",
-    "AMAT", "LRCX", "KLAC", "ARM", "MU",
-    # 大型科技 & 云
-    "MSFT", "GOOGL", "GOOG", "AMZN", "META", "AAPL", "TSLA",
-    # AI 算力 & 数据中心
-    "CRWV", "NBIS", "IREN", "APLD", "WULF", "CIFR", "CORZ",
-    "HUT", "BTDR", "MARA", "RIOT",
-    # 网络 & 光纤
-    "ANET", "CSCO", "CIEN", "COHR", "LITE", "AAOI",
-    # 企业 AI & 软件
-    "PLTR", "NOW", "CRM", "ORCL", "ADBE", "SNOW", "DDOG",
-    "MDB", "CFLT", "PATH", "AI", "BBAI", "SOUN", "APP",
-    "DUOL", "HUBS", "RBLX", "S", "CRWD", "NET", "TWLO",
-    "ZM", "GTLB", "TTD", "HOOD", "TOST", "U", "UPST",
-    "VEEV", "TYL", "PROS", "PEGA",
-    # 金融数据
-    "MCO", "MSCI", "SPGI",
-    # 医疗 AI & 生物科技
-    "TEM", "ISRG", "HIMS", "RXRX", "SDGR", "ABSI", "CDNA", "NTLA",
-    # 机器人 & 自动驾驶
-    "SYM", "SERV", "KSCP", "MBLY", "AUR",
-    # 核能 & 电力
-    "VST", "CEG", "TLN", "NRG", "D", "AEP", "SO", "DUK",
-    "EXC", "PEG", "PCG", "NEE",
-    "SMR", "OKLO", "LEU", "BWXT", "NNE", "ASPI",
-    # 电力基础设施 & 数据中心建设
-    "GEV", "ETN", "PWR", "PRIM", "MTZ", "HUBB", "AYI", "VRT", "MOD",
-    "BE", "SMCI", "DELL", "HPE", "EQIX", "DLR",
-    # 铀
-    "CCJ", "UEC", "DNN", "NXE", "LTBR",
-    # 中概
-    "BABA", "BIDU", "PDD",
-    # ETF（行业 & 主题）
-    "URA", "URNM", "AIQ", "BOTZ", "ROBO", "ROBT", "IRBO",
-    "CHAT", "WTAI", "ARKQ", "SOXX", "SMH", "SOXL", "SOXS",
-    "NVDL", "NVDS",
-]
+from screener_volume import get_us_large_cap_tickers, _AI_WATCHLIST
 
 
 # ─── 数据拉取 ──────────────────────────────────────────────────────────

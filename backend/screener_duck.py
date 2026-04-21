@@ -19,6 +19,7 @@ import threading
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import datetime, timedelta
 from redis_client import set_duck_daily_snapshot
+from screener_volume import _AI_WATCHLIST
 
 import numpy as np
 import pandas as pd
@@ -514,7 +515,7 @@ def run_duck_scan() -> dict:
     全量扫描，返回结果 dict（可直接存入 Redis）。
     格式：{"date": "YYYY-MM-DD", "scan_time": "...", "stocks": [...]}
     """
-    tickers  = get_us_large_cap_tickers()
+    tickers  = list(set(get_us_large_cap_tickers()) | set(_AI_WATCHLIST))
     results  = []
     total    = len(tickers)
     lock     = threading.Lock()

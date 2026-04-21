@@ -13,6 +13,7 @@
 import datetime
 import threading
 from concurrent.futures import ThreadPoolExecutor, as_completed
+from screener_volume import _AI_WATCHLIST
 
 import requests
 from urllib.parse import quote
@@ -434,7 +435,7 @@ def screen_ticker(ticker):
 
 def run_top_volume_scan() -> dict:
     """Scan all tickers and return structured result dict (stored in Redis)."""
-    tickers = get_stock_universe()
+    tickers = list(set(get_stock_universe()) | set(_AI_WATCHLIST))
     results = []
     lock    = threading.Lock()
     total   = len(tickers)

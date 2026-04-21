@@ -19,6 +19,7 @@ import requests
 from datetime import datetime, timedelta
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from redis_client import set_divergence_daily_snapshot
+from screener_volume import _AI_WATCHLIST
 import threading
 
 # ─────────────────────────────────────────────
@@ -557,7 +558,7 @@ def screen_ticker(ticker, verbose=False):
 
 def run_full_scan() -> dict:
     """Screens all tickers and returns a DivergenceScreenerResult dict."""
-    tickers = get_us_large_cap_tickers()
+    tickers = list(set(get_us_large_cap_tickers()) | set(_AI_WATCHLIST))
     results = []
     lock    = threading.Lock()
 

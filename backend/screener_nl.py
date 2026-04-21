@@ -22,6 +22,7 @@ import anthropic
 import yfinance as yf
 
 from redis_client import get_nl_fundamentals, set_nl_fundamentals
+from screener_volume import _AI_WATCHLIST
 
 ANTHROPIC_API_KEY = os.environ.get("ANTHROPIC_API_KEY", "")
 MAX_RESULTS = 25
@@ -244,7 +245,7 @@ def fetch_fundamentals_universe() -> list[dict]:
     Fetch fundamental data for all S&P 500 stocks in parallel.
     Takes ~60-90s at MAX_WORKERS=20.
     """
-    tickers = get_sp500_tickers()
+    tickers = list(set(get_sp500_tickers()) | set(_AI_WATCHLIST))
     results = []
     with ThreadPoolExecutor(max_workers=MAX_WORKERS) as ex:
         futures = {ex.submit(_fetch_one, t): t for t in tickers}

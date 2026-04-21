@@ -203,6 +203,48 @@ _FALLBACK_NDX = [
 ]
 
 
+# ─── AI 赛道自选股（隔夜套利及本文件共用）─────────────────────────────────
+_AI_WATCHLIST = [
+    # 芯片 & 半导体设备
+    "NVDA", "AMD", "AVGO", "MRVL", "INTC", "QCOM", "TSM", "ASML",
+    "AMAT", "LRCX", "KLAC", "ARM", "MU",
+    # 大型科技 & 云
+    "MSFT", "GOOGL", "GOOG", "AMZN", "META", "AAPL", "TSLA",
+    # AI 算力 & 数据中心
+    "CRWV", "NBIS", "IREN", "APLD", "WULF", "CIFR", "CORZ",
+    "HUT", "BTDR", "MARA", "RIOT",
+    # 网络 & 光纤
+    "ANET", "CSCO", "CIEN", "COHR", "LITE", "AAOI",
+    # 企业 AI & 软件
+    "PLTR", "NOW", "CRM", "ORCL", "ADBE", "SNOW", "DDOG",
+    "MDB", "CFLT", "PATH", "AI", "BBAI", "SOUN", "APP",
+    "DUOL", "HUBS", "RBLX", "S", "CRWD", "NET", "TWLO",
+    "ZM", "GTLB", "TTD", "HOOD", "TOST", "U", "UPST",
+    "VEEV", "TYL", "PROS", "PEGA",
+    # 金融数据
+    "MCO", "MSCI", "SPGI",
+    # 医疗 AI & 生物科技
+    "TEM", "ISRG", "HIMS", "RXRX", "SDGR", "ABSI", "CDNA", "NTLA",
+    # 机器人 & 自动驾驶
+    "SYM", "SERV", "KSCP", "MBLY", "AUR",
+    # 核能 & 电力
+    "VST", "CEG", "TLN", "NRG", "D", "AEP", "SO", "DUK",
+    "EXC", "PEG", "PCG", "NEE",
+    "SMR", "OKLO", "LEU", "BWXT", "NNE", "ASPI",
+    # 电力基础设施 & 数据中心建设
+    "GEV", "ETN", "PWR", "PRIM", "MTZ", "HUBB", "AYI", "VRT", "MOD",
+    "BE", "SMCI", "DELL", "HPE", "EQIX", "DLR",
+    # 铀
+    "CCJ", "UEC", "DNN", "NXE", "LTBR",
+    # 中概
+    "BABA", "BIDU", "PDD",
+    # ETF（行业 & 主题）
+    "URA", "URNM", "AIQ", "BOTZ", "ROBO", "ROBT", "IRBO",
+    "CHAT", "WTAI", "ARKQ", "SOXX", "SMH", "SOXL", "SOXS",
+    "NVDL", "NVDS",
+]
+
+
 def get_us_large_cap_tickers() -> list[str]:
     """返回 S&P500 + NASDAQ-100 + ETF 的去重 ticker 列表。"""
     sp500, ndx = [], []
@@ -427,7 +469,7 @@ def run_volume_scan() -> dict:
     tz_la  = zoneinfo.ZoneInfo("America/Los_Angeles")
     now_la = datetime.datetime.now(tz_la)
 
-    tickers = get_us_large_cap_tickers()
+    tickers = list(set(get_us_large_cap_tickers()) | set(_AI_WATCHLIST))
     results = []
     lock    = threading.Lock()
 
