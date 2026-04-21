@@ -74,4 +74,4 @@ export const MACRO_EVENTS: MacroEvent[] = [
 
 // ─── Default tickers ──────────────────────────────────────────────────────
 
-export const DEFAULT_TICKERS = "TQQQ,SOXL,TSLL,NVDL";
+export const DEFAULT_TICKERS = "TQQQ,SOXL,TSLL,NVDL,AMZN,GOOGL,NVDA,MSFT";
