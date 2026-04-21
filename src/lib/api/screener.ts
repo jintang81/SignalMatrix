@@ -26,6 +26,8 @@ import type {
   AIStrategyResult,
   InvertedDuckScreenerResult,
   InvertedDuckStock,
+  OvernightScreenerResult,
+  OvernightExitAnalysis,
 } from "@/types";
 
 // ─── Backend URLs ─────────────────────────────────────────────────
@@ -1276,3 +1278,106 @@ export async function fetchFundamentalsStatus(): Promise<{
     return { cached: false };
   }
 }
+
+// ─── Overnight Arbitrage Public API ──────────────────────────────
+
+export async function fetchOvernightScreener(): Promise<OvernightScreenerResult> {
+  if (BACKEND_URL) {
+    const res = await fetch(`${BACKEND_URL}/api/screener/overnight`);
+    if (res.status === 404) return MOCK_OVERNIGHT_DATA;
+    if (!res.ok) throw new Error(`Overnight screener API error: ${res.status}`);
+    return res.json();
+  }
+  await new Promise((r) => setTimeout(r, 600));
+  return MOCK_OVERNIGHT_DATA;
+}
+
+export async function fetchOvernightStatus(): Promise<ScanStatus> {
+  if (!BACKEND_URL) return { status: "idle" };
+  try {
+    const res = await fetch(`${BACKEND_URL}/api/screener/overnight/status`);
+    if (!res.ok) return { status: "idle" };
+    return res.json();
+  } catch {
+    return { status: "idle" };
+  }
+}
+
+export async function triggerOvernightScan(): Promise<void> {
+  if (!BACKEND_URL) return;
+  const res = await fetch(`${BACKEND_URL}/api/screener/overnight/run`, {
+    method: "POST",
+    headers: { "X-API-Key": SCAN_API_KEY },
+  });
+  if (!res.ok && res.status !== 202) throw new Error(`Overnight trigger error: ${res.status}`);
+}
+
+export async function fetchOvernightExitAnalysis(
+  ticker: string,
+  date?: string,
+): Promise<OvernightExitAnalysis> {
+  const url = new URL(`${BACKEND_URL}/api/screener/overnight/exit/${ticker}`);
+  if (date) url.searchParams.set("date", date);
+  const res = await fetch(url.toString());
+  if (!res.ok) throw new Error(`Exit analysis error: ${res.status}`);
+  return res.json();
+}
+
+// ─── Overnight Mock Data ──────────────────────────────────────────
+
+export const MOCK_OVERNIGHT_DATA: OvernightScreenerResult = {
+  date: "2026-04-20",
+  scan_time: "2026-04-20 15:42:15 PDT",
+  market_env: {
+    spx_price: 5248.3,
+    spx_ma20:  5102.6,
+    suitable:  true,
+    signal:    "bull",
+  },
+  stocks: [
+    {
+      ticker:        "NVDA",
+      price:         879.45,
+      pct_change:    4.12,
+      volume_ratio:  2.31,
+      max_gain_20d:  14.5,
+      mktcap_b:      2160.0,
+      today_volume:  48_500_000,
+      avg_vol_20d:   22_100_000,
+      float_shares:  24_400_000_000,
+      turnover_rate: 7.3,
+      vwap:          872.18,
+      above_vwap:    true,
+      chart: {
+        dates:  ["2026-03-10","2026-03-11","2026-03-12","2026-03-13","2026-03-14","2026-03-17","2026-03-18","2026-03-19","2026-03-20","2026-03-21","2026-03-24","2026-03-25","2026-03-26","2026-03-27","2026-03-28","2026-03-31","2026-04-01","2026-04-02","2026-04-03","2026-04-07","2026-04-08","2026-04-09","2026-04-10","2026-04-14","2026-04-15","2026-04-16","2026-04-17","2026-04-18","2026-04-19","2026-04-20"],
+        open:   [820,825,832,828,835,840,848,853,845,860,862,855,858,865,870,875,880,872,865,858,862,870,875,878,880,875,872,870,875,879],
+        high:   [828,835,840,835,845,850,855,860,855,868,870,862,865,872,878,882,885,878,872,865,870,878,882,885,888,882,878,876,882,885],
+        low:    [818,822,828,825,832,838,845,848,842,858,858,852,854,862,868,872,878,865,860,852,858,867,872,875,878,872,868,868,872,876],
+        close:  [825,832,835,832,842,848,853,855,852,865,865,858,862,870,875,880,882,870,863,860,868,875,879,882,885,878,874,872,877,879],
+        volume: [18_000_000,21_000_000,25_000_000,19_000_000,20_000_000,22_000_000,26_000_000,23_000_000,20_000_000,28_000_000,24_000_000,21_000_000,22_000_000,25_000_000,26_000_000,30_000_000,28_000_000,22_000_000,19_000_000,18_000_000,21_000_000,26_000_000,28_000_000,27_000_000,30_000_000,25_000_000,22_000_000,20_000_000,24_000_000,48_500_000],
+      },
+    },
+    {
+      ticker:        "META",
+      price:         538.60,
+      pct_change:    3.78,
+      volume_ratio:  1.65,
+      max_gain_20d:  9.2,
+      mktcap_b:      1368.0,
+      today_volume:  18_200_000,
+      avg_vol_20d:   11_600_000,
+      float_shares:  2_540_000_000,
+      turnover_rate: 6.1,
+      vwap:          534.22,
+      above_vwap:    true,
+      chart: {
+        dates:  ["2026-03-10","2026-03-11","2026-03-12","2026-03-13","2026-03-14","2026-03-17","2026-03-18","2026-03-19","2026-03-20","2026-03-21","2026-03-24","2026-03-25","2026-03-26","2026-03-27","2026-03-28","2026-03-31","2026-04-01","2026-04-02","2026-04-03","2026-04-07","2026-04-08","2026-04-09","2026-04-10","2026-04-14","2026-04-15","2026-04-16","2026-04-17","2026-04-18","2026-04-19","2026-04-20"],
+        open:   [500,505,510,508,512,515,520,522,518,525,528,524,526,530,533,536,538,532,528,522,526,530,534,536,538,535,532,530,534,538],
+        high:   [508,512,515,512,518,520,525,528,524,530,532,528,530,534,538,540,542,536,532,528,532,536,540,542,545,540,536,534,540,542],
+        low:    [498,502,507,505,510,513,518,519,515,522,524,520,522,527,530,533,535,528,524,519,523,527,531,533,535,532,529,527,531,534],
+        close:  [505,510,512,510,515,518,522,524,520,528,530,526,528,532,535,538,540,532,528,524,528,532,536,540,542,538,534,532,536,538],
+        volume: [10_000_000,12_000_000,14_000_000,11_000_000,12_000_000,13_000_000,15_000_000,14_000_000,11_000_000,16_000_000,14_000_000,12_000_000,13_000_000,14_000_000,15_000_000,17_000_000,16_000_000,13_000_000,11_000_000,10_000_000,12_000_000,15_000_000,16_000_000,15_000_000,17_000_000,14_000_000,13_000_000,12_000_000,14_000_000,18_200_000],
+      },
+    },
+  ],
+};

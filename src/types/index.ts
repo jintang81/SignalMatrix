@@ -612,3 +612,79 @@ export interface NLSearchResult {
   fundamentals_date:  string;
   scan_time:          string;
 }
+
+// ─── Overnight Arbitrage Screener Types ───────────────────────────
+
+export interface OvernightChartData {
+  dates:  string[];
+  open:   number[];
+  high:   number[];
+  low:    number[];
+  close:  number[];
+  volume: number[];
+}
+
+export interface OvernightStock {
+  ticker:        string;
+  price:         number;
+  pct_change:    number;       // 盘中涨幅 %（实时价 vs 昨收）
+  volume_ratio:  number;       // 量比
+  max_gain_20d:  number;       // 过去 20 日最大单日涨幅 %
+  mktcap_b:      number;       // 市值（B 美元）
+  today_volume:  number;
+  avg_vol_20d:   number;
+  float_shares:  number | null;
+  turnover_rate: number | null; // 换手率 %（null = 无流通股数据）
+  vwap:          number | null; // 分时 VWAP（null = 无 Tradier 数据）
+  above_vwap:    boolean | null;
+  chart:         OvernightChartData;
+}
+
+export interface OvernightMarketEnv {
+  spx_price: number;
+  spx_ma20:  number;
+  suitable:  boolean;          // SPX > MA20 = 牛市环境
+  signal:    "bull" | "bear" | "unknown";
+}
+
+export interface OvernightScreenerResult {
+  date:       string;
+  scan_time?: string;
+  market_env: OvernightMarketEnv;
+  stocks:     OvernightStock[];
+}
+
+// 次日早盘出场分析
+export type OvernightExitScenario =
+  | "washout"      // 先涨后跌，未破开盘价 → 洗盘，持有
+  | "flee"         // 先涨后跌，跌破开盘价 → 出逃，立即卖
+  | "weak_bounce"  // 先跌后涨，未超开盘价 → 弱反弹，立即卖
+  | "fake_drop"    // 先跌后涨，超过开盘价 → 假摔，持有
+  | "steady_rise"  // 小幅稳健拉升 → 可继续持有
+  | "weak";        // 开盘走弱 → 立即卖
+
+export type OvernightExitAction = "hold" | "hold_strong" | "sell_asap";
+
+export interface OvernightTimesalesBar {
+  time:   string;
+  open:   number;
+  high:   number;
+  low:    number;
+  close:  number;
+  volume: number;
+}
+
+export interface OvernightExitAnalysis {
+  ticker:        string;
+  date:          string;
+  status:        "analyzed" | "waiting";
+  message?:      string;       // set when status="waiting"
+  open_price?:   number;
+  current_price?: number;
+  gain_pct?:     number;
+  scenario?:     OvernightExitScenario;
+  action?:       OvernightExitAction;
+  detail?:       string;
+  color?:        "green" | "red" | "blue";
+  bars:          OvernightTimesalesBar[];
+}

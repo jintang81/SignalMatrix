@@ -469,6 +469,40 @@ def get_inverted_duck_snapshot_index() -> list:
     return _get_snapshot_index(INVERTED_DUCK_SNAP_PREFIX)
 
 
+# ─── Overnight Arbitrage helpers ─────────────────────────────────
+
+OVERNIGHT_KEY_RESULT = "screener:overnight:result"
+OVERNIGHT_KEY_STATUS = "screener:overnight:status"
+
+
+def get_overnight_result() -> dict | None:
+    """Returns the last overnight scan result, or None if not yet available."""
+    raw = _get_redis().get(OVERNIGHT_KEY_RESULT)
+    if raw is None:
+        return None
+    return json.loads(raw) if isinstance(raw, str) else raw
+
+
+def set_overnight_result(data: dict) -> None:
+    _get_redis().setex(OVERNIGHT_KEY_RESULT, TTL, json.dumps(data, ensure_ascii=False))
+
+
+def get_overnight_status() -> dict:
+    """Returns status dict; defaults to {"status": "idle"} if key missing."""
+    raw = _get_redis().get(OVERNIGHT_KEY_STATUS)
+    if raw is None:
+        return {"status": "idle"}
+    return json.loads(raw) if isinstance(raw, str) else raw
+
+
+def set_overnight_status(status: str, **extra) -> None:
+    now = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+    payload: dict = {"status": status, "updated_at": now, **extra}
+    if status == "running":
+        payload["started_at"] = now
+    _get_redis().setex(OVERNIGHT_KEY_STATUS, TTL, json.dumps(payload))
+
+
 # ─── NL Screener: Fundamentals cache ─────────────────────────────
 
 NL_FUNDAMENTALS_KEY = "screener:nl:fundamentals"

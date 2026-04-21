@@ -95,6 +95,18 @@ const OPTION_SIGNALS: Screener[] = [
   },
 ];
 
+const TRADING_TOOLS: Screener[] = [
+  {
+    id: "overnight-arbi",
+    name: "OVERNIGHT ARBI",
+    nameZh: "隔夜套利选股",
+    desc: "3:40 PM EST 自动扫描盘中涨幅 3–5%、量比 > 1、换手率 5–10%、价格站上 VWAP 的强势股，提供次日早盘 5 种出场场景分析。",
+    tags: ["隔夜持仓", "VWAP", "量比", "换手率", "次日监控"],
+    href: "/screeners/overnight",
+    available: true,
+  },
+];
+
 const AI_STRATEGY: Screener[] = [
   {
     id: "ai-strategy",
@@ -216,6 +228,13 @@ export default function ScreeerPage() {
         titleZh="期权信号"
         accent="#4f9cf9"
         screeners={OPTION_SIGNALS}
+      />
+
+      <Section
+        title="TRADING TOOLS"
+        titleZh="交易工具"
+        accent="#c9a84c"
+        screeners={TRADING_TOOLS}
       />
 
       <Section

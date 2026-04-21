@@ -48,12 +48,18 @@ NL Screener:
   POST /api/screener/nl/refresh-fundamentals         — refresh fundamentals cache
   GET  /api/screener/nl/fundamentals-status          — cache metadata
 
+Overnight Arbitrage:
+  GET  /api/screener/overnight            — 隔夜套利 cached results
+  GET  /api/screener/overnight/status     — scan status
+  POST /api/screener/overnight/run        — trigger scan (cron 3:40 PM EST)
+  GET  /api/screener/overnight/exit/{ticker}?date=YYYY-MM-DD — 次日早盘出场分析
+
 Required env vars:
   API_KEY                  — protects all /run and /nl endpoints
   UPSTASH_REDIS_REST_URL   — from Upstash console
   UPSTASH_REDIS_REST_TOKEN — from Upstash console
   ANTHROPIC_API_KEY        — for AI strategy + NL screener
-  TRADIER_TOKEN            — for unusual options scan
+  TRADIER_TOKEN            — for unusual options scan + overnight VWAP
 """
 
 import asyncio
@@ -79,6 +85,7 @@ from redis_client import (
     get_ai_strategy_daily_snapshot, get_ai_strategy_snapshot_index,
     get_inverted_duck_result, get_inverted_duck_status, set_inverted_duck_result, set_inverted_duck_status,
     get_inverted_duck_snapshot_index, get_inverted_duck_daily_snapshot,
+    get_overnight_result, get_overnight_status, set_overnight_result, set_overnight_status,
 )
 from screener import run_full_scan
 from screener_volume import run_volume_scan
@@ -89,6 +96,7 @@ from screener_top_volume import run_top_volume_scan
 from screener_inverted_duck_bill import run_inverted_duck_scan as run_inverted_duck_scan_fn
 from ai_strategy import run_ai_strategy
 from screener_nl import run_nl_search, run_fundamentals_refresh
+from screener_overnight import run_overnight_scan, get_exit_analysis
 from sellput_proxy import router as sellput_router
 
 # ─── App ──────────────────────────────────────────────────────────
@@ -103,14 +111,15 @@ def _reset_stale_running_statuses():
     This prevents the frontend from polling forever after a Render restart/redeploy.
     """
     for get_fn, set_fn in [
-        (get_status,           set_status),
-        (get_volume_status,    set_volume_status),
-        (get_duck_status,      set_duck_status),
-        (get_options_status,   set_options_status),
-        (get_top_div_status,   set_top_div_status),
-        (get_top_vol_status,       set_top_vol_status),
-        (get_ai_strategy_status,   set_ai_strategy_status),
-        (get_inverted_duck_status, set_inverted_duck_status),
+        (get_status,             set_status),
+        (get_volume_status,      set_volume_status),
+        (get_duck_status,        set_duck_status),
+        (get_options_status,     set_options_status),
+        (get_top_div_status,     set_top_div_status),
+        (get_top_vol_status,         set_top_vol_status),
+        (get_ai_strategy_status,     set_ai_strategy_status),
+        (get_inverted_duck_status,   set_inverted_duck_status),
+        (get_overnight_status,       set_overnight_status),
     ]:
         try:
             if get_fn().get("status") == "running":
@@ -136,6 +145,7 @@ _top_vol_executor = ThreadPoolExecutor(max_workers=1)   # one top-volume scan at
 _ai_strategy_executor      = ThreadPoolExecutor(max_workers=1)  # one AI strategy at a time
 _inverted_duck_executor    = ThreadPoolExecutor(max_workers=1)  # one inverted-duck scan at a time
 _nl_executor               = ThreadPoolExecutor(max_workers=2)  # NL search + fundamentals refresh
+_overnight_executor        = ThreadPoolExecutor(max_workers=1)  # one overnight scan at a time
 
 
 # ─── Sell Put proxy router ────────────────────────────────────────
@@ -573,6 +583,67 @@ async def trigger_inverted_duck_scan(
     return {"message": "inverted-duck scan started"}
 
 
+# ─── Overnight Arbitrage Endpoints ───────────────────────────────
+
+@app.get("/api/screener/overnight")
+def get_overnight():
+    """Returns the most recent overnight-arbitrage scan results from Redis cache."""
+    data = get_overnight_result()
+    if data is None:
+        raise HTTPException(
+            status_code=404,
+            detail="No overnight scan results yet. Trigger a scan first via POST /api/screener/overnight/run",
+        )
+    return data
+
+
+@app.get("/api/screener/overnight/status")
+def get_overnight_scan_status():
+    """Returns current overnight scan status: idle | running | done | error."""
+    return get_overnight_status()
+
+
+@app.post("/api/screener/overnight/run", status_code=202)
+async def trigger_overnight_scan(
+    background_tasks: BackgroundTasks,
+    x_api_key: str = Header(None),
+):
+    """
+    Triggers an async background overnight-arbitrage scan.
+    Intended to be called by cron at 3:40 PM EST on weekdays.
+    Returns 202 immediately; poll /api/screener/overnight/status for progress.
+    """
+    if not API_KEY or x_api_key != API_KEY:
+        raise HTTPException(status_code=401, detail="Invalid or missing API key")
+
+    current = get_overnight_status()
+    if current.get("status") == "running":
+        return {"message": "overnight scan already running", "status": current}
+
+    set_overnight_status("running")
+    background_tasks.add_task(_run_overnight_scan_task)
+    return {"message": "overnight scan started"}
+
+
+@app.get("/api/screener/overnight/exit/{ticker}")
+async def get_overnight_exit(ticker: str, date: str | None = None):
+    """
+    On-demand exit analysis for a held position.
+    Fetches the 9:30-9:45 AM opening 1-min bars from Tradier and
+    classifies the opening into one of 5 exit scenarios.
+    ?date=YYYY-MM-DD defaults to today (LA timezone).
+    """
+    ticker = ticker.upper()
+    loop = asyncio.get_event_loop()
+    try:
+        result = await loop.run_in_executor(
+            _overnight_executor, get_exit_analysis, ticker, date
+        )
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=f"Exit analysis failed: {str(exc)[:200]}")
+    return result
+
+
 # ─── NL Screener Endpoints ───────────────────────────────────────
 
 from pydantic import BaseModel
@@ -737,3 +808,13 @@ async def _run_nl_refresh_task() -> None:
         await loop.run_in_executor(_nl_executor, run_fundamentals_refresh)
     except Exception as exc:
         print(f"NL fundamentals refresh failed: {exc}", flush=True)
+
+
+async def _run_overnight_scan_task() -> None:
+    loop = asyncio.get_event_loop()
+    try:
+        result = await loop.run_in_executor(_overnight_executor, run_overnight_scan)
+        set_overnight_result(result)
+        set_overnight_status("done")
+    except Exception as exc:
+        set_overnight_status("error", error=str(exc)[:200])
