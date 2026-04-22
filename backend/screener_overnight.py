@@ -219,6 +219,14 @@ def compute_vwap(bars: list):
     return total_pv / total_vol if total_vol > 0 else None
 
 
+def _is_post_market() -> bool:
+    """Returns True if US market has closed for the day (>= 4:00 PM ET)."""
+    et_tz  = ZoneInfo("America/New_York")
+    now_et = datetime.datetime.now(et_tz)
+    close  = now_et.replace(hour=16, minute=0, second=0, microsecond=0)
+    return now_et >= close
+
+
 def fetch_spx_env() -> dict:
     """获取 S&P 500 vs 20 日均线的大盘环境状态。"""
     try:
@@ -242,9 +250,10 @@ def fetch_spx_env() -> dict:
 
 # ─── Phase 1 筛选（条件 1、2、3） ─────────────────────────────────────────
 
-def _screen_phase1(ticker: str):
+def _screen_phase1(ticker: str, vol_fraction: float):
     """
     使用日线数据进行 Phase 1 筛选（条件 1、2、3）。
+    vol_fraction: 盘中时为 0.83；收盘后传入 1.0（直接比较全天量）。
     返回候选 dict 或 None（不符合条件）。
     """
     try:
@@ -288,7 +297,7 @@ def _screen_phase1(ticker: str):
         return None
     avg_vol_20d = sum(hist_vols) / len(hist_vols)
     vol_ratio   = (
-        today_vol / (avg_vol_20d * TRADING_DAY_FRACTION)
+        today_vol / (avg_vol_20d * vol_fraction)
         if avg_vol_20d > 0 else 0.0
     )
     if vol_ratio < VOL_RATIO_MIN:
@@ -333,6 +342,13 @@ def run_overnight_scan() -> dict:
     tz_abbr = "PDT" if now_la.dst() else "PST"
     today_str = now_la.strftime("%Y-%m-%d")
 
+    # ── 扫描模式：盘中 vs 收盘后 ──
+    post_market   = _is_post_market()
+    vol_fraction  = 1.0 if post_market else TRADING_DAY_FRACTION
+    timesales_end = "16:00" if post_market else "15:40"
+    mode_label    = "收盘后（全天量比）" if post_market else f"盘中（量比系数 {vol_fraction}）"
+    print(f"[overnight] 扫描模式: {mode_label}")
+
     tickers = list(set(get_us_large_cap_tickers()) | set(_AI_WATCHLIST))
     print(f"[overnight] Phase 1: 扫描 {len(tickers)} 只股票（含 AI 自选股）...")
 
@@ -341,7 +357,7 @@ def run_overnight_scan() -> dict:
     lock = threading.Lock()
 
     def _worker(t):
-        res = _screen_phase1(t)
+        res = _screen_phase1(t, vol_fraction)
         if res:
             with lock:
                 phase1_results.append(res)
@@ -378,7 +394,7 @@ def run_overnight_scan() -> dict:
 
         # 条件 5：股价 > VWAP
         time.sleep(0.1)  # Tradier rate-limit buffer
-        bars = fetch_tradier_timesales(ticker, today_str, "09:30", "15:40")
+        bars = fetch_tradier_timesales(ticker, today_str, "09:30", timesales_end)
         vwap = compute_vwap(bars) if bars else None
         if vwap:
             above_vwap    = c["price"] > vwap
