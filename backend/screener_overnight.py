@@ -37,9 +37,11 @@ MIN_PCT_GAIN          = 3.0      # 条件 1：涨幅下限
 MAX_PCT_GAIN          = 5.0      # 条件 1：涨幅上限
 SURGE_THRESH          = 5.0      # 条件 2：单日最大涨幅门槛
 VOL_RATIO_MIN         = 1.0      # 条件 3：量比门槛
-TURNOVER_MIN          = 5.0      # 条件 4：换手率下限（%）
+TURNOVER_MIN          = 0.5      # 条件 4：换手率下限（%）
 TURNOVER_MAX          = 10.0     # 条件 4：换手率上限（%）
-TRADING_DAY_FRACTION  = 0.949    # 3:40 PM ≈ 6h10m / 6.5h = 94.9%
+TRADING_DAY_FRACTION  = 0.83     # 3:40 PM 前约完成全天 83% 成交量
+                                  # 美股成交量 U 型分布：收盘前 20 分钟占 ~17%，
+                                  # 不能用时间比 6h10m/6.5h=94.9%（会严重低估量比）
 VOL_MA_PERIOD         = 20
 CHART_LEN             = 30       # 图表显示最近 N 根日线 bar
 MAX_WORKERS           = 8

@@ -173,7 +173,7 @@ export default function OvernightPage() {
         </div>
 
         <p className="text-xs text-muted/60 leading-relaxed">
-          3:40 PM EST 自动扫描盘中涨幅 3–5%、量比 &gt; 1、换手率 5–10%、股价站上 VWAP，
+          3:40 PM EST 自动扫描盘中涨幅 3–5%、量比 &gt; 1、换手率 &gt; 0.5%、股价站上 VWAP，
           过去 20 日内有 &gt; 5% 单日涨幅的强势股 — 隔夜持仓，次日早盘出货。
           仅适用于牛市（指数站上短期均线）且次日无高波动事件。
         </p>
