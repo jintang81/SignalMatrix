@@ -16,7 +16,7 @@ export default function Home() {
 
   return (
     <div className="py-6 space-y-4 min-h-[calc(100dvh-3.5rem)]">
-      {/* ── Top row: Stock Query + Options Flow ── */}
+      {/* ── Top row: Stock Query + AI Strategy ── */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
         <section className="panel p-5">
           <p className="text-sm tracking-[0.18em] text-muted mb-1">STOCK QUERY</p>
@@ -35,15 +35,15 @@ export default function Home() {
         </section>
 
         <section className="panel p-5">
-          <p className="text-sm tracking-[0.18em] mb-1" style={{ color: "#4f9cf9" }}>◈ OPTION SIGNALS</p>
-          <p className="text-xs text-muted/60 mb-3">期权异常信号与收益策略工具</p>
+          <p className="text-sm tracking-[0.18em] text-gold mb-1">◈ AI STRATEGY</p>
+          <p className="text-xs text-muted/60 mb-3">AI 自动推荐筛选组合，支持自然语言筛选美股</p>
           <div className="flex flex-wrap gap-2">
             {[
-              { name: "异常期权信号", href: "/screeners/unusual-options" },
-              { name: "Sell Put",     href: "/screeners/sell-put" },
+              { name: "AI 综合策略",    href: "/screeners/ai-strategy" },
+              { name: "AI 自然语言筛选", href: "/screeners/nl-results" },
             ].map(({ name, href }) => (
               <Link key={name} href={href}>
-                <span className="tag tag-muted cursor-pointer hover:bg-[#4f9cf9]/15 transition-colors">{name}</span>
+                <span className="tag tag-gold cursor-pointer hover:bg-gold/20 transition-colors">{name}</span>
               </Link>
             ))}
           </div>
@@ -104,22 +104,25 @@ export default function Home() {
         </div>
       </section>
 
-      {/* AI Strategy */}
+      {/* Trading Tools */}
       <section className="panel p-5">
-        <p className="text-sm tracking-[0.18em] text-gold mb-1">◈ AI STRATEGY</p>
+        <p className="text-sm tracking-[0.18em] text-[#4f9cf9] mb-1">⬡ TRADING TOOLS</p>
         <p className="text-xs text-muted/60 mb-3">
-          根据 SPY / QQQ 趋势、VIX 恐慌指数、板块轮动，AI 自动推荐筛选组合；支持自然语言筛选美股
+          期权异常信号扫描、Sell Put 五关决策框架、隔夜套利选股 — 盘中按需触发，辅助交易决策
         </p>
         <div className="flex flex-wrap gap-2">
           {[
-            { name: "AI 综合策略", href: "/screeners/ai-strategy" },
-            { name: "AI 自然语言筛选", href: "/screeners/nl-results" },
+            { name: "异常期权信号", href: "/screeners/unusual-options" },
+            { name: "Sell Put",     href: "/screeners/sell-put" },
+            { name: "隔夜套利选股", href: "/screeners/overnight" },
           ].map(({ name, href }) => (
             <Link key={name} href={href}>
-              <span className="tag tag-gold cursor-pointer hover:bg-gold/20 transition-colors">{name}</span>
+              <span className="tag cursor-pointer transition-colors" style={{ color: "#4f9cf9", borderColor: "#4f9cf9", background: "transparent" }}
+                onMouseEnter={e => (e.currentTarget.style.background = "rgba(79,156,249,0.15)")}
+                onMouseLeave={e => (e.currentTarget.style.background = "transparent")}
+              >{name}</span>
             </Link>
           ))}
-          <span className="tag tag-muted">Claude API (Anthropic)</span>
         </div>
       </section>
     </div>
