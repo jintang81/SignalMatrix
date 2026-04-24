@@ -103,10 +103,10 @@ def fetch_chart(ticker: str) -> tuple:
     lows    = q.get("low", [])
     volumes = q.get("volume", [])
 
-    # 移除当日未收盘 bar（盘中 Yahoo Finance 会追加一根当日不完整 bar）
-    la_tz    = ZoneInfo("America/Los_Angeles")
-    today_la = datetime.datetime.now(la_tz).date()
-    if ts and datetime.datetime.fromtimestamp(ts[-1], tz=la_tz).date() >= today_la:
+    # 移除当日 bar。Yahoo Finance 日线时间戳 = UTC 午夜，用 UTC 日期比较最准确；
+    # 若用 LA/PT 转换，UTC 午夜 = PT 前一天下午，会导致今天的 bar 被误判为昨天而保留。
+    today_utc = datetime.datetime.now(datetime.timezone.utc).date()
+    if ts and datetime.datetime.fromtimestamp(ts[-1], tz=datetime.timezone.utc).date() >= today_utc:
         ts      = ts[:-1]
         closes  = closes[:-1]
         opens   = opens[:-1]  if opens   else opens
@@ -132,11 +132,13 @@ def fetch_chart(ticker: str) -> tuple:
                 "volume": volumes[i],
             })
 
-    # prev_close: 优先 meta 字段，为 0 时依次 fallback 到 chartPreviousClose 和上一根日线
+    # prev_close: 优先用 rows[-1]["close"]（adjclose, 正确反映分红/拆股调整）。
+    # meta.regularMarketPreviousClose 会在 ex-dividend 当天返回除权前一天价格（偏高），
+    # 或在某些股票数据异常时返回 0，均不可靠。
     prev_close = (
+        (rows[-1]["close"] if rows else 0) or
         meta.get("regularMarketPreviousClose", 0) or
-        meta.get("chartPreviousClose", 0) or
-        (rows[-1]["close"] if rows else 0)
+        0
     )
     intraday_meta = {
         "price":      meta.get("regularMarketPrice", 0) or 0,
