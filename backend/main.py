@@ -96,7 +96,10 @@ from screener_top_volume import run_top_volume_scan
 from screener_inverted_duck_bill import run_inverted_duck_scan as run_inverted_duck_scan_fn
 from ai_strategy import run_ai_strategy
 from screener_nl import run_nl_search, run_fundamentals_refresh
-from screener_overnight import run_overnight_scan, get_exit_analysis, screen_ticker_debug
+from screener_overnight import (
+    run_overnight_scan, get_exit_analysis, screen_ticker_debug,
+    run_backtest, get_backtest_result, get_backtest_status,
+)
 from sellput_proxy import router as sellput_router
 
 # ─── App ──────────────────────────────────────────────────────────
@@ -146,6 +149,7 @@ _ai_strategy_executor      = ThreadPoolExecutor(max_workers=1)  # one AI strateg
 _inverted_duck_executor    = ThreadPoolExecutor(max_workers=1)  # one inverted-duck scan at a time
 _nl_executor               = ThreadPoolExecutor(max_workers=2)  # NL search + fundamentals refresh
 _overnight_executor        = ThreadPoolExecutor(max_workers=1)  # one overnight scan at a time
+_backtest_executor         = ThreadPoolExecutor(max_workers=1)  # one backtest at a time
 
 
 # ─── Sell Put proxy router ────────────────────────────────────────
@@ -641,6 +645,42 @@ async def get_overnight_debug(ticker: str):
     except Exception as exc:
         raise HTTPException(status_code=500, detail=f"Debug failed: {str(exc)[:200]}")
     return result
+
+
+@app.get("/api/screener/overnight/backtest")
+def get_overnight_backtest():
+    """Returns the most recent backtest result from Redis cache."""
+    try:
+        return get_backtest_result()
+    except ValueError:
+        raise HTTPException(
+            status_code=404,
+            detail="No backtest result yet. POST /api/screener/overnight/backtest/run to start.",
+        )
+
+
+@app.get("/api/screener/overnight/backtest/status")
+def get_overnight_backtest_status():
+    """Returns current backtest status: idle | running | done."""
+    return get_backtest_status()
+
+
+@app.post("/api/screener/overnight/backtest/run", status_code=202)
+async def trigger_overnight_backtest(
+    background_tasks: BackgroundTasks,
+    x_api_key: str = Header(None),
+):
+    """
+    Triggers an async background backtest (C1+C2+C3 only, ~60-90s).
+    Returns 202 immediately; poll /api/screener/overnight/backtest/status.
+    """
+    if not API_KEY or x_api_key != API_KEY:
+        raise HTTPException(status_code=401, detail="Invalid or missing API key")
+    current = get_backtest_status()
+    if current.get("status") == "running":
+        return {"message": "backtest already running", "status": current}
+    background_tasks.add_task(lambda: run_backtest(days=20))
+    return {"message": "backtest started"}
 
 
 @app.get("/api/screener/overnight/exit/{ticker}")

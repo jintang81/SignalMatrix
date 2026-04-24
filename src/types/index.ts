@@ -688,3 +688,46 @@ export interface OvernightExitAnalysis {
   color?:        "green" | "red" | "blue";
   bars:          OvernightTimesalesBar[];
 }
+
+// 隔夜套利回测
+export interface BacktestTrade {
+  ticker:           string;
+  date:             string;
+  entry_close:      number;
+  exit_open:        number;
+  pct_change:       number;
+  vol_ratio:        number;
+  max_gain_20d:     number;
+  overnight_return: number;
+}
+
+export interface BacktestDay {
+  date:       string;
+  count:      number;
+  win_count:  number;
+  win_rate:   number;
+  avg_return: number;
+  trades:     BacktestTrade[];
+}
+
+export interface BacktestSummary {
+  total_trades: number;
+  win_count:    number;
+  loss_count:   number;
+  win_rate:     number;
+  avg_return:   number;
+  avg_win:      number;
+  avg_loss:     number;
+  best_trade:   BacktestTrade | null;
+  worst_trade:  BacktestTrade | null;
+}
+
+export interface OvernightBacktestResult {
+  backtest_days:      number;
+  computed_at:        string;
+  conditions_used:    string[];
+  conditions_skipped: string[];
+  note:               string;
+  summary:            BacktestSummary;
+  days:               BacktestDay[];
+}

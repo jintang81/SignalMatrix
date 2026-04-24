@@ -28,6 +28,7 @@ import type {
   InvertedDuckStock,
   OvernightScreenerResult,
   OvernightExitAnalysis,
+  OvernightBacktestResult,
 } from "@/types";
 
 // ─── Backend URLs ─────────────────────────────────────────────────
@@ -1321,6 +1322,30 @@ export async function fetchOvernightExitAnalysis(
   const res = await fetch(url.toString());
   if (!res.ok) throw new Error(`Exit analysis error: ${res.status}`);
   return res.json();
+}
+
+export async function fetchOvernightBacktest(): Promise<OvernightBacktestResult> {
+  const res = await fetch(`${BACKEND_URL}/api/screener/overnight/backtest`);
+  if (!res.ok) throw new Error(`Backtest fetch error: ${res.status}`);
+  return res.json();
+}
+
+export async function fetchOvernightBacktestStatus(): Promise<{ status: string; started_at?: string; updated_at?: string }> {
+  try {
+    const res = await fetch(`${BACKEND_URL}/api/screener/overnight/backtest/status`);
+    if (!res.ok) return { status: "idle" };
+    return res.json();
+  } catch {
+    return { status: "idle" };
+  }
+}
+
+export async function triggerOvernightBacktest(): Promise<void> {
+  const res = await fetch(`${BACKEND_URL}/api/screener/overnight/backtest/run`, {
+    method: "POST",
+    headers: { "X-API-Key": SCAN_API_KEY },
+  });
+  if (!res.ok && res.status !== 202) throw new Error(`Backtest trigger error: ${res.status}`);
 }
 
 // ─── Overnight Mock Data ──────────────────────────────────────────

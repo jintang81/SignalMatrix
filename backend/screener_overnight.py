@@ -665,3 +665,233 @@ def screen_ticker_debug(ticker: str, post_market: bool | None = None) -> dict:
         for v in conds.values()
     )
     return out
+
+
+# ─── 回测（Backtest）────────────────────────────────────────────────────────
+
+BACKTEST_RESULT_KEY = "screener:overnight:backtest"
+BACKTEST_STATUS_KEY = "screener:overnight:backtest:status"
+BACKTEST_TTL        = 24 * 3600  # 24h
+
+import json as _json
+
+
+def _fetch_history_for_backtest(ticker: str) -> list:
+    """Fetch ~120 days of daily OHLCV for backtest. Returns complete bars only."""
+    try:
+        end   = int(time.time())
+        start = end - 125 * 86400
+        path  = (
+            f"/v8/finance/chart/{ticker}"
+            f"?interval=1d&period1={start}&period2={end}&events=history"
+        )
+        r = _session.get(_proxy_url(path), timeout=20)
+        r.raise_for_status()
+        data = r.json()
+        res  = data["chart"]["result"][0]
+        meta = res["meta"]
+        q    = res["indicators"]["quote"][0]
+        ts   = res.get("timestamp", [])
+        ac   = res.get("indicators", {}).get("adjclose", [{}])[0].get("adjclose", [])
+        closes  = ac if ac else q.get("close", [])
+        opens   = q.get("open", [])
+        volumes = q.get("volume", [])
+
+        rows = []
+        for i in range(len(closes)):
+            if closes[i] is not None and opens[i] is not None and volumes[i] is not None:
+                rows.append({
+                    "date":   datetime.datetime.utcfromtimestamp(ts[i]).strftime("%Y-%m-%d"),
+                    "open":   opens[i],
+                    "close":  closes[i],
+                    "volume": int(volumes[i]),
+                })
+
+        # Strip today's partial bar (same heuristic as fetch_chart)
+        cur = meta.get("regularMarketPrice", 0) or 0
+        if rows and cur and rows[-1]["close"]:
+            if abs(rows[-1]["close"] - cur) / cur < 0.005:
+                rows = rows[:-1]
+
+        return rows
+    except Exception:
+        return []
+
+
+def _backtest_single_ticker(ticker: str) -> list:
+    """Run C1+C2+C3 conditions on historical data. Returns list of trade dicts."""
+    rows = _fetch_history_for_backtest(ticker)
+    n = len(rows)
+    if n < 25:
+        return []
+
+    trades = []
+    # i = entry day index; need rows[i-20:i] for lookback, rows[i+1] for exit open
+    for i in range(21, n - 1):
+        prev_close = rows[i - 1]["close"]
+        cur_price  = rows[i]["close"]
+        if not prev_close or not cur_price:
+            continue
+
+        # C1: gain ∈ [MIN_PCT_GAIN, MAX_PCT_GAIN]
+        pct = (cur_price - prev_close) / prev_close * 100
+        if not (MIN_PCT_GAIN <= pct <= MAX_PCT_GAIN):
+            continue
+
+        # C2: max single-day close-to-close gain in past 20 days > SURGE_THRESH
+        lookback  = rows[i - 20:i]
+        max_daily = 0.0
+        for j in range(1, len(lookback)):
+            c0 = lookback[j - 1]["close"]
+            c1 = lookback[j]["close"]
+            if c0 > 0:
+                d = (c1 - c0) / c0 * 100
+                if d > max_daily:
+                    max_daily = d
+        if max_daily < SURGE_THRESH:
+            continue
+
+        # C3: full-day volume ratio > VOL_RATIO_MIN
+        vols = [r["volume"] for r in lookback if r["volume"]]
+        if not vols:
+            continue
+        avg_vol = sum(vols) / len(vols)
+        if avg_vol == 0:
+            continue
+        vol_ratio = rows[i]["volume"] / avg_vol
+        if vol_ratio < VOL_RATIO_MIN:
+            continue
+
+        # Exit: next trading day open
+        exit_open = rows[i + 1]["open"]
+        if not exit_open:
+            continue
+
+        trades.append({
+            "ticker":           ticker,
+            "date":             rows[i]["date"],
+            "entry_close":      round(cur_price, 2),
+            "exit_open":        round(exit_open, 2),
+            "pct_change":       round(pct, 2),
+            "vol_ratio":        round(vol_ratio, 2),
+            "max_gain_20d":     round(max_daily, 1),
+            "overnight_return": round((exit_open - cur_price) / cur_price * 100, 2),
+        })
+
+    return trades
+
+
+def _set_backtest_status(status: str, **extra) -> None:
+    from datetime import timezone
+    now = datetime.datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+    payload = {"status": status, "updated_at": now, **extra}
+    if status == "running":
+        payload["started_at"] = now
+    from redis_client import _get_redis
+    _get_redis().setex(BACKTEST_STATUS_KEY, 3600, _json.dumps(payload))
+
+
+def get_backtest_status() -> dict:
+    from redis_client import _get_redis
+    raw = _get_redis().get(BACKTEST_STATUS_KEY)
+    if raw is None:
+        return {"status": "idle"}
+    return _json.loads(raw) if isinstance(raw, str) else raw
+
+
+def get_backtest_result() -> dict:
+    from redis_client import _get_redis
+    raw = _get_redis().get(BACKTEST_RESULT_KEY)
+    if raw is None:
+        raise ValueError("No backtest result")
+    return _json.loads(raw) if isinstance(raw, str) else raw
+
+
+def run_backtest(days: int = 20) -> dict:
+    """
+    回测过去 `days` 个交易日的隔夜套利策略（仅 C1+C2+C3，不含 VWAP 和换手率）。
+    结果存入 Redis，TTL 24h。
+    """
+    from collections import defaultdict
+
+    la_tz     = ZoneInfo("America/Los_Angeles")
+    today_str = datetime.datetime.now(la_tz).strftime("%Y-%m-%d")
+    tz_abbr   = "PDT" if datetime.datetime.now(la_tz).dst() else "PST"
+
+    _set_backtest_status("running")
+    print("[backtest] 开始回测...")
+
+    tickers    = list(set(get_us_large_cap_tickers()) | set(_AI_WATCHLIST))
+    all_trades = []
+    lock       = threading.Lock()
+
+    def _worker(t):
+        result = _backtest_single_ticker(t)
+        if result:
+            with lock:
+                all_trades.extend(result)
+
+    with ThreadPoolExecutor(max_workers=MAX_WORKERS) as ex:
+        futures = [ex.submit(_worker, t) for t in tickers]
+        for f in as_completed(futures):
+            try:
+                f.result()
+            except Exception as e:
+                print(f"[backtest] worker error: {e}")
+
+    # Exclude today (exit open not yet confirmed)
+    all_trades = [t for t in all_trades if t["date"] < today_str]
+
+    # Group by date, keep last `days` trading days
+    by_date = defaultdict(list)
+    for trade in all_trades:
+        by_date[trade["date"]].append(trade)
+
+    all_dates = sorted(by_date.keys())[-days:]
+
+    days_data = []
+    for date in all_dates:
+        trades  = sorted(by_date[date], key=lambda x: x["overnight_return"], reverse=True)
+        returns = [t["overnight_return"] for t in trades]
+        wins    = [r for r in returns if r > 0]
+        days_data.append({
+            "date":       date,
+            "count":      len(trades),
+            "win_count":  len(wins),
+            "win_rate":   round(len(wins) / len(trades) * 100, 1) if trades else 0.0,
+            "avg_return": round(sum(returns) / len(returns), 2) if returns else 0.0,
+            "trades":     trades,
+        })
+
+    all_returns  = [t["overnight_return"] for d in all_dates for t in by_date[d]]
+    wins_all     = [r for r in all_returns if r > 0]
+    losses_all   = [r for r in all_returns if r <= 0]
+    flat_trades  = [t for d in all_dates for t in by_date[d]]
+
+    summary = {
+        "total_trades": len(all_returns),
+        "win_count":    len(wins_all),
+        "loss_count":   len(losses_all),
+        "win_rate":     round(len(wins_all) / len(all_returns) * 100, 1) if all_returns else 0.0,
+        "avg_return":   round(sum(all_returns) / len(all_returns), 2) if all_returns else 0.0,
+        "avg_win":      round(sum(wins_all) / len(wins_all), 2) if wins_all else 0.0,
+        "avg_loss":     round(sum(losses_all) / len(losses_all), 2) if losses_all else 0.0,
+        "best_trade":   max(flat_trades, key=lambda x: x["overnight_return"]) if flat_trades else None,
+        "worst_trade":  min(flat_trades, key=lambda x: x["overnight_return"]) if flat_trades else None,
+    }
+
+    result = {
+        "backtest_days":       len(all_dates),
+        "computed_at":         datetime.datetime.now(la_tz).strftime(f"%Y-%m-%d %H:%M:%S {tz_abbr}"),
+        "conditions_used":     ["C1: 涨幅 3-5%", "C2: 20日最大单日涨幅 > 5%", "C3: 量比 > 1"],
+        "conditions_skipped":  ["C4: 换手率 (需流通股数据)", "C5: VWAP (需分时数据)"],
+        "note":                "回测未过滤换手率和 VWAP，结果偏乐观；实际胜率会略低",
+        "summary":             summary,
+        "days":                days_data,
+    }
+
+    from redis_client import _get_redis
+    _get_redis().setex(BACKTEST_RESULT_KEY, BACKTEST_TTL, _json.dumps(result, ensure_ascii=False))
+    _set_backtest_status("done")
+    print(f"[backtest] 完成: {len(all_returns)} 笔，胜率 {summary['win_rate']}%")
+    return result
