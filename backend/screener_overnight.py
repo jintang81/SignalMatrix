@@ -103,17 +103,6 @@ def fetch_chart(ticker: str) -> tuple:
     lows    = q.get("low", [])
     volumes = q.get("volume", [])
 
-    # 移除当日 bar。Yahoo Finance 日线时间戳 = UTC 午夜，用 UTC 日期比较最准确；
-    # 若用 LA/PT 转换，UTC 午夜 = PT 前一天下午，会导致今天的 bar 被误判为昨天而保留。
-    today_utc = datetime.datetime.now(datetime.timezone.utc).date()
-    if ts and datetime.datetime.fromtimestamp(ts[-1], tz=datetime.timezone.utc).date() >= today_utc:
-        ts      = ts[:-1]
-        closes  = closes[:-1]
-        opens   = opens[:-1]  if opens   else opens
-        highs   = highs[:-1]  if highs   else highs
-        lows    = lows[:-1]   if lows    else lows
-        volumes = volumes[:-1] if volumes else volumes
-
     rows = []
     for i in range(len(closes)):
         if all(x is not None for x in [
@@ -132,9 +121,18 @@ def fetch_chart(ticker: str) -> tuple:
                 "volume": volumes[i],
             })
 
-    # prev_close: 优先用 rows[-1]["close"]（adjclose, 正确反映分红/拆股调整）。
-    # meta.regularMarketPreviousClose 会在 ex-dividend 当天返回除权前一天价格（偏高），
-    # 或在某些股票数据异常时返回 0，均不可靠。
+    # 去除今日 bar（盘中不完整 bar 或收盘后当日完整 bar）。
+    # Yahoo 对当日 bar 的 close 使用当前市价，与 meta.regularMarketPrice 几乎完全一致。
+    # 用价格比较（< 0.5% 误差）而非时间戳，因为 Yahoo 时间戳时区约定不稳定。
+    # 去除后 rows[-1] 始终为昨日已收盘 bar，可安全作为 prev_close 来源。
+    current_price_raw = meta.get("regularMarketPrice", 0) or 0
+    if rows and current_price_raw and rows[-1]["close"]:
+        if abs(rows[-1]["close"] - current_price_raw) / current_price_raw < 0.005:
+            rows = rows[:-1]
+
+    # prev_close: 优先用 rows[-1]["close"]（adjclose，含分红/拆股调整）。
+    # meta.regularMarketPreviousClose 在 ex-dividend 当日返回除权前一天价格（偏高），
+    # 或在数据异常时返回 0，均不可靠。
     prev_close = (
         (rows[-1]["close"] if rows else 0) or
         meta.get("regularMarketPreviousClose", 0) or
