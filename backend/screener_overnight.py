@@ -132,9 +132,15 @@ def fetch_chart(ticker: str) -> tuple:
                 "volume": volumes[i],
             })
 
+    # prev_close: 优先 meta 字段，为 0 时依次 fallback 到 chartPreviousClose 和上一根日线
+    prev_close = (
+        meta.get("regularMarketPreviousClose", 0) or
+        meta.get("chartPreviousClose", 0) or
+        (rows[-1]["close"] if rows else 0)
+    )
     intraday_meta = {
         "price":      meta.get("regularMarketPrice", 0) or 0,
-        "prev_close": meta.get("regularMarketPreviousClose", 0) or 0,
+        "prev_close": prev_close,
         "volume":     meta.get("regularMarketVolume", 0) or 0,
         "market_cap": meta.get("marketCap", 0) or 0,
     }
