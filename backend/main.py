@@ -96,7 +96,7 @@ from screener_top_volume import run_top_volume_scan
 from screener_inverted_duck_bill import run_inverted_duck_scan as run_inverted_duck_scan_fn
 from ai_strategy import run_ai_strategy
 from screener_nl import run_nl_search, run_fundamentals_refresh
-from screener_overnight import run_overnight_scan, get_exit_analysis
+from screener_overnight import run_overnight_scan, get_exit_analysis, screen_ticker_debug
 from sellput_proxy import router as sellput_router
 
 # ─── App ──────────────────────────────────────────────────────────
@@ -623,6 +623,24 @@ async def trigger_overnight_scan(
     set_overnight_status("running")
     background_tasks.add_task(_run_overnight_scan_task)
     return {"message": "overnight scan started"}
+
+
+@app.get("/api/screener/overnight/debug/{ticker}")
+async def get_overnight_debug(ticker: str):
+    """
+    单支股票 5 条件诊断，返回每条通过/失败原因及原始数值。
+    用于排查为什么某只股票没有被选中。
+    示例: GET /api/screener/overnight/debug/ADBE
+    """
+    ticker = ticker.upper()
+    loop = asyncio.get_event_loop()
+    try:
+        result = await loop.run_in_executor(
+            _overnight_executor, screen_ticker_debug, ticker
+        )
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=f"Debug failed: {str(exc)[:200]}")
+    return result
 
 
 @app.get("/api/screener/overnight/exit/{ticker}")

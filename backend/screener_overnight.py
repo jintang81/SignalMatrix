@@ -287,6 +287,7 @@ def _screen_phase1(ticker: str, vol_fraction: float):
             if chg > max_daily:
                 max_daily = chg
     if max_daily < SURGE_THRESH:
+        print(f"[overnight] {ticker}: c1✓({pct_change:.1f}%) c2✗ 20日最大涨幅{max_daily:.1f}%<{SURGE_THRESH}%")
         return None
 
     # ── 条件 3：量比 > 1 ──
@@ -301,6 +302,7 @@ def _screen_phase1(ticker: str, vol_fraction: float):
         if avg_vol_20d > 0 else 0.0
     )
     if vol_ratio < VOL_RATIO_MIN:
+        print(f"[overnight] {ticker}: c1✓({pct_change:.1f}%) c2✓ c3✗ 量比{vol_ratio:.2f}(今{today_vol} avg{int(avg_vol_20d)} frac{vol_fraction})")
         return None
 
     # 通过 Phase 1 — 构建候选记录
@@ -519,3 +521,141 @@ def get_exit_analysis(ticker: str, date_str: str | None = None) -> dict:
         "color":         color,
         "bars":          bars,
     }
+
+
+# ─── 单股诊断（debug 端点用）────────────────────────────────────────────
+
+def screen_ticker_debug(ticker: str, post_market: bool | None = None) -> dict:
+    """
+    对单支股票运行全部 5 条件并返回每条的详细诊断信息。
+    供 GET /api/screener/overnight/debug/{ticker} 调用。
+    passed=None 表示该条件因数据缺失而跳过（不过滤）。
+    """
+    if post_market is None:
+        post_market = _is_post_market()
+
+    vol_fraction  = 1.0 if post_market else TRADING_DAY_FRACTION
+    timesales_end = "16:00" if post_market else "15:40"
+    la_tz         = ZoneInfo("America/Los_Angeles")
+    today_str     = datetime.datetime.now(la_tz).strftime("%Y-%m-%d")
+
+    out: dict = {
+        "ticker":      ticker.upper(),
+        "date":        today_str,
+        "post_market": post_market,
+        "vol_fraction": vol_fraction,
+        "conditions":  {},
+        "passed":      False,
+    }
+
+    try:
+        rows, meta = fetch_chart(ticker)
+    except Exception as e:
+        out["error"] = f"fetch_chart 失败: {e}"
+        return out
+
+    price      = meta["price"]
+    prev_close = meta["prev_close"]
+    today_vol  = meta["volume"]
+
+    out["snapshot"] = {
+        "price":      price,
+        "prev_close": prev_close,
+        "today_vol":  today_vol,
+        "mktcap_b":   round(meta["market_cap"] / 1e9 if meta["market_cap"] else 0, 1),
+        "rows_count": len(rows),
+    }
+
+    conds = out["conditions"]
+
+    # 条件 1
+    if not price or not prev_close or prev_close <= 0:
+        conds["c1"] = {"passed": False, "reason": "价格/昨收为 0"}
+    else:
+        pct = (price - prev_close) / prev_close * 100
+        ok  = MIN_PCT_GAIN <= pct <= MAX_PCT_GAIN
+        conds["c1"] = {
+            "passed":     ok,
+            "pct_change": round(pct, 2),
+            "required":   f"[{MIN_PCT_GAIN}%, {MAX_PCT_GAIN}%]",
+            "reason":     "通过" if ok else f"涨幅 {pct:.2f}% 不在 [{MIN_PCT_GAIN}%, {MAX_PCT_GAIN}%]",
+        }
+
+    # 条件 2
+    if len(rows) < HIST_WIN + 1:
+        conds["c2"] = {"passed": False, "reason": f"历史数据不足 ({len(rows)} 行, 需 {HIST_WIN+1})"}
+    else:
+        hist   = rows[-(HIST_WIN + 1):]
+        max_d  = 0.0
+        for i in range(1, len(hist)):
+            c0, c1v = hist[i-1]["close"], hist[i]["close"]
+            if c0 > 0:
+                max_d = max(max_d, (c1v - c0) / c0 * 100)
+        ok = max_d >= SURGE_THRESH
+        conds["c2"] = {
+            "passed":        ok,
+            "max_daily_20d": round(max_d, 2),
+            "required":      f">= {SURGE_THRESH}%",
+            "reason":        "通过" if ok else f"20日最大单日涨幅 {max_d:.2f}% < {SURGE_THRESH}%",
+        }
+
+    # 条件 3
+    if len(rows) < VOL_MA_PERIOD + 1:
+        conds["c3"] = {"passed": False, "reason": "历史数据不足"}
+    else:
+        hist_vols   = [r["volume"] for r in rows[-VOL_MA_PERIOD:]]
+        avg_v       = sum(hist_vols) / len(hist_vols)
+        vol_ratio   = today_vol / (avg_v * vol_fraction) if avg_v > 0 else 0.0
+        ok          = vol_ratio >= VOL_RATIO_MIN
+        conds["c3"] = {
+            "passed":       ok,
+            "vol_ratio":    round(vol_ratio, 3),
+            "today_vol":    today_vol,
+            "avg_vol_20d":  int(avg_v),
+            "vol_fraction": vol_fraction,
+            "required":     f">= {VOL_RATIO_MIN}",
+            "reason":       "通过" if ok else f"量比 {vol_ratio:.3f} < {VOL_RATIO_MIN}",
+        }
+
+    # 条件 4
+    float_shares = fetch_float_shares(ticker)
+    if float_shares and float_shares > 0:
+        tr = today_vol / float_shares * 100
+        ok = TURNOVER_MIN <= tr <= TURNOVER_MAX
+        conds["c4"] = {
+            "passed":        ok,
+            "turnover_rate": round(tr, 3),
+            "float_shares":  int(float_shares),
+            "required":      f"[{TURNOVER_MIN}%, {TURNOVER_MAX}%]",
+            "reason":        "通过" if ok else f"换手率 {tr:.3f}% 不在 [{TURNOVER_MIN}%, {TURNOVER_MAX}%]",
+        }
+    else:
+        conds["c4"] = {"passed": None, "reason": "无法获取流通股数（不过滤）"}
+
+    # 条件 5
+    bars = fetch_tradier_timesales(ticker, today_str, "09:30", timesales_end)
+    vwap = compute_vwap(bars) if bars else None
+    if vwap:
+        ok = price > vwap
+        conds["c5"] = {
+            "passed":        ok,
+            "price":         price,
+            "vwap":          round(vwap, 2),
+            "bars_count":    len(bars),
+            "timesales_end": timesales_end,
+            "reason":        "通过" if ok else f"价格 {price:.2f} < VWAP {vwap:.2f}",
+        }
+    else:
+        conds["c5"] = {
+            "passed":        None,
+            "bars_count":    len(bars),
+            "timesales_end": timesales_end,
+            "reason":        "无 Tradier timesales 数据（不过滤）",
+        }
+
+    # 综合：None 视为通过（数据缺失不过滤）
+    out["passed"] = all(
+        v.get("passed") is not False
+        for v in conds.values()
+    )
+    return out
