@@ -731,3 +731,40 @@ export interface OvernightBacktestResult {
   summary:            BacktestSummary;
   days:               BacktestDay[];
 }
+
+// ─── MA20 拐头 Screener ───────────────────────────────────────────
+
+export interface MA20ChartData {
+  dates:  string[];
+  open:   number[];
+  high:   number[];
+  low:    number[];
+  close:  number[];
+  volume: number[];
+  ma20:   (number | null)[];
+}
+
+export interface MA20Stock {
+  ticker:      string;
+  direction:   "up" | "dn";
+  last_close:  number;
+  ma20_today:  number;
+  ma20_yest:   number;
+  ma20_day2:   number;
+  ma20_slope:  number;        // 正=拐头向上，负=拐头向下
+  market_cap:  number;
+  chart:       MA20ChartData;
+}
+
+export interface MA20ScreenerResult {
+  date:           string;
+  scan_time:      string;
+  turning_up:     MA20Stock[];
+  turning_dn:     MA20Stock[];
+  total_scanned:  number;
+  signals_found:  number;
+  params: {
+    ma_period:        number;
+    min_market_cap_b: number;
+  };
+}

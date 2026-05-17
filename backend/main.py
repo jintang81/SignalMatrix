@@ -86,6 +86,7 @@ from redis_client import (
     get_inverted_duck_result, get_inverted_duck_status, set_inverted_duck_result, set_inverted_duck_status,
     get_inverted_duck_snapshot_index, get_inverted_duck_daily_snapshot,
     get_overnight_result, get_overnight_status, set_overnight_result, set_overnight_status,
+    get_ma20_result, get_ma20_status, set_ma20_result, set_ma20_status,
 )
 from screener import run_full_scan
 from screener_volume import run_volume_scan
@@ -100,6 +101,7 @@ from screener_overnight import (
     run_overnight_scan, get_exit_analysis, screen_ticker_debug,
     run_backtest, get_backtest_result, get_backtest_status,
 )
+from screener_ma20 import run_ma20_scan
 from sellput_proxy import router as sellput_router
 
 # ─── App ──────────────────────────────────────────────────────────
@@ -123,6 +125,7 @@ def _reset_stale_running_statuses():
         (get_ai_strategy_status,     set_ai_strategy_status),
         (get_inverted_duck_status,   set_inverted_duck_status),
         (get_overnight_status,       set_overnight_status),
+        (get_ma20_status,            set_ma20_status),
     ]:
         try:
             if get_fn().get("status") == "running":
@@ -149,6 +152,7 @@ _ai_strategy_executor      = ThreadPoolExecutor(max_workers=1)  # one AI strateg
 _inverted_duck_executor    = ThreadPoolExecutor(max_workers=1)  # one inverted-duck scan at a time
 _nl_executor               = ThreadPoolExecutor(max_workers=2)  # NL search + fundamentals refresh
 _overnight_executor        = ThreadPoolExecutor(max_workers=1)  # one overnight scan at a time
+_ma20_executor             = ThreadPoolExecutor(max_workers=1)  # one MA20 scan at a time
 _backtest_executor         = ThreadPoolExecutor(max_workers=1)  # one backtest at a time
 
 
@@ -876,3 +880,54 @@ async def _run_overnight_scan_task() -> None:
         set_overnight_status("done")
     except Exception as exc:
         set_overnight_status("error", error=str(exc)[:200])
+
+
+# ─── MA20 拐头 Endpoints ──────────────────────────────────────────
+
+@app.get("/api/screener/ma20")
+def get_ma20():
+    """Returns the most recent MA20 turning-point scan results from Redis cache."""
+    data = get_ma20_result()
+    if data is None:
+        raise HTTPException(
+            status_code=404,
+            detail="No MA20 scan results yet. Trigger a scan first via POST /api/screener/ma20/run",
+        )
+    return data
+
+
+@app.get("/api/screener/ma20/status")
+def get_ma20_scan_status():
+    """Returns current MA20 scan status: idle | running | done | error."""
+    return get_ma20_status()
+
+
+@app.post("/api/screener/ma20/run", status_code=202)
+async def trigger_ma20_scan(
+    background_tasks: BackgroundTasks,
+    x_api_key: str = Header(None),
+):
+    """
+    Triggers an async background MA20 turning-point scan.
+    Requires X-API-Key header. Returns 202 immediately; poll /api/screener/ma20/status.
+    """
+    if not API_KEY or x_api_key != API_KEY:
+        raise HTTPException(status_code=401, detail="Invalid or missing API key")
+
+    current = get_ma20_status()
+    if current.get("status") == "running":
+        return {"message": "MA20 scan already running", "status": current}
+
+    set_ma20_status("running")
+    background_tasks.add_task(_run_ma20_scan_task)
+    return {"message": "MA20 scan started"}
+
+
+async def _run_ma20_scan_task() -> None:
+    loop = asyncio.get_event_loop()
+    try:
+        result = await loop.run_in_executor(_ma20_executor, run_ma20_scan)
+        set_ma20_result(result)
+        set_ma20_status("done")
+    except Exception as exc:
+        set_ma20_status("error", error=str(exc)[:200])

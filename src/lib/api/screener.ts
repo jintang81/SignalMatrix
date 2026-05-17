@@ -29,6 +29,8 @@ import type {
   OvernightScreenerResult,
   OvernightExitAnalysis,
   OvernightBacktestResult,
+  MA20ScreenerResult,
+  MA20Stock,
 } from "@/types";
 
 // ─── Backend URLs ─────────────────────────────────────────────────
@@ -1405,4 +1407,122 @@ export const MOCK_OVERNIGHT_DATA: OvernightScreenerResult = {
       },
     },
   ],
+};
+
+// ─── MA20 拐头 Public API ─────────────────────────────────────────
+
+export async function fetchMA20Screener(): Promise<MA20ScreenerResult> {
+  if (BACKEND_URL) {
+    const res = await fetch(`${BACKEND_URL}/api/screener/ma20`);
+    if (res.status === 404) return MOCK_MA20_DATA;
+    if (!res.ok) throw new Error(`MA20 screener API error: ${res.status}`);
+    return res.json();
+  }
+  await new Promise((r) => setTimeout(r, 600));
+  return MOCK_MA20_DATA;
+}
+
+export async function fetchMA20Status(): Promise<ScanStatus> {
+  if (!BACKEND_URL) return { status: "idle" };
+  try {
+    const res = await fetch(`${BACKEND_URL}/api/screener/ma20/status`);
+    if (!res.ok) return { status: "idle" };
+    return res.json();
+  } catch {
+    return { status: "idle" };
+  }
+}
+
+export async function triggerMA20Scan(): Promise<void> {
+  if (!BACKEND_URL) return;
+  const res = await fetch(`${BACKEND_URL}/api/screener/ma20/run`, {
+    method: "POST",
+    headers: { "X-API-Key": SCAN_API_KEY },
+  });
+  if (!res.ok && res.status !== 202)
+    throw new Error(`MA20 trigger error: ${res.status}`);
+}
+
+// ─── MA20 Mock Data ───────────────────────────────────────────────
+
+function makeMockMA20Stock(
+  ticker: string,
+  price: number,
+  direction: "up" | "dn",
+  marketCapB: number,
+): MA20Stock {
+  const N = 60;
+  const closes = generatePriceSeries(price, N);
+  const open: number[] = [];
+  const high: number[] = [];
+  const low: number[]  = [];
+  const volume: number[] = [];
+
+  for (let i = 0; i < N; i++) {
+    const c = closes[i];
+    const range = c * (0.008 + Math.random() * 0.012);
+    const o = c + (Math.random() - 0.5) * range;
+    open.push(+o.toFixed(2));
+    high.push(+(Math.max(c, o) + Math.random() * range * 0.4).toFixed(2));
+    low.push(+(Math.min(c, o) - Math.random() * range * 0.4).toFixed(2));
+    volume.push(Math.round(5e6 + Math.random() * 20e6));
+  }
+
+  // Compute MA20 series
+  const ma20: (number | null)[] = closes.map((_, i) => {
+    if (i < 19) return null;
+    const slice = closes.slice(i - 19, i + 1);
+    return +(slice.reduce((a, b) => a + b, 0) / 20).toFixed(4);
+  });
+
+  const ma20_today = ma20[N - 1] as number;
+  const ma20_yest  = ma20[N - 2] as number;
+  // Force the direction by tweaking the last slope sign
+  const baseSlope = Math.abs(ma20_today - ma20_yest) || price * 0.001;
+  const slope = direction === "up" ? baseSlope : -baseSlope;
+  const yest  = +(ma20_today - slope).toFixed(4);
+  const day2  = direction === "up"
+    ? +(yest - Math.abs(slope) * 0.5).toFixed(4)
+    : +(yest + Math.abs(slope) * 0.5).toFixed(4);
+
+  return {
+    ticker,
+    direction,
+    last_close:  +price.toFixed(2),
+    ma20_today:  +ma20_today.toFixed(4),
+    ma20_yest:   yest,
+    ma20_day2:   day2,
+    ma20_slope:  +slope.toFixed(4),
+    market_cap:  Math.round(marketCapB * 1e9),
+    chart: {
+      dates:  generateDates(N).reverse(),
+      open,
+      high,
+      low,
+      close:  closes.map((v) => +v.toFixed(2)),
+      volume,
+      ma20,
+    },
+  };
+}
+
+export const MOCK_MA20_DATA: MA20ScreenerResult = {
+  date:          "2026-05-16",
+  scan_time:     "2026-05-16 16:40:00 PDT",
+  total_scanned: 612,
+  signals_found: 9,
+  turning_up: [
+    makeMockMA20Stock("NVDA",  878.50, "up",  2800),
+    makeMockMA20Stock("META",  521.30, "up",  1350),
+    makeMockMA20Stock("AMD",   156.80, "up",   255),
+    makeMockMA20Stock("SMH",   238.40, "up",    95),
+    makeMockMA20Stock("MSFT",  428.20, "up",  3200),
+  ],
+  turning_dn: [
+    makeMockMA20Stock("TSLA",  172.80, "dn",   556),
+    makeMockMA20Stock("INTC",   22.40, "dn",    95),
+    makeMockMA20Stock("ARKK",   41.20, "dn",    62),
+    makeMockMA20Stock("COIN",  224.60, "dn",    55),
+  ],
+  params: { ma_period: 20, min_market_cap_b: 30 },
 };

@@ -102,6 +102,15 @@ const TRADING_TOOLS: Screener[] = [
     href: "/screeners/overnight",
     available: true,
   },
+  {
+    id: "ma20",
+    name: "MA20 TURNING POINT",
+    nameZh: "MA20 拐头",
+    desc: "检测 20 日均线当日拐头的标的（市值 ≥ 30B）。拐头向上（MA20 由平转升）与拐头向下（MA20 由平转跌）分列两组，每日 16:37 PDT 自动扫描 S&P500 + NASDAQ-100 + ETF 约 600 只。",
+    tags: ["MA20", "均线拐头", "趋势转换", "多空双向"],
+    href: "/screeners/ma20",
+    available: true,
+  },
 ];
 
 const AI_STRATEGY: Screener[] = [
