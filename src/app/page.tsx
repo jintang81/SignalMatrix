@@ -108,13 +108,14 @@ export default function Home() {
       <section className="panel p-5">
         <p className="text-sm tracking-[0.18em] text-[#4f9cf9] mb-1">⬡ TRADING TOOLS</p>
         <p className="text-xs text-muted/60 mb-3">
-          期权异常信号扫描、Sell Put 五关决策框架、隔夜套利选股 — 盘中按需触发，辅助交易决策
+          期权异常信号扫描、Sell Put 五关决策框架、隔夜套利选股、MA20 拐头 — 盘中按需触发，辅助交易决策
         </p>
         <div className="flex flex-wrap gap-2">
           {[
             { name: "异常期权信号", href: "/screeners/unusual-options" },
             { name: "Sell Put",     href: "/screeners/sell-put" },
             { name: "隔夜套利选股", href: "/screeners/overnight" },
+            { name: "MA20 拐头",    href: "/screeners/ma20" },
           ].map(({ name, href }) => (
             <Link key={name} href={href}>
               <span className="tag cursor-pointer transition-colors" style={{ color: "#4f9cf9", borderColor: "#4f9cf9", background: "transparent" }}
