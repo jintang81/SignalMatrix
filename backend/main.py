@@ -64,6 +64,8 @@ Required env vars:
 
 import asyncio
 import os
+import smtplib
+from email.mime.text import MIMEText
 from concurrent.futures import ThreadPoolExecutor
 
 from fastapi import BackgroundTasks, FastAPI, Header, HTTPException
@@ -141,7 +143,27 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-API_KEY           = os.environ.get("API_KEY", "")
+API_KEY            = os.environ.get("API_KEY", "")
+GMAIL_USER         = os.environ.get("GMAIL_USER", "")
+GMAIL_APP_PASSWORD = os.environ.get("GMAIL_APP_PASSWORD", "")
+NOTIFY_PHONE       = os.environ.get("NOTIFY_PHONE", "")  # 10-digit AT&T number
+
+
+def _send_ma20_sms(result: dict) -> None:
+    """Send MA20 scan summary via AT&T email-to-SMS gateway."""
+    if not all([GMAIL_USER, GMAIL_APP_PASSWORD, NOTIFY_PHONE]):
+        return
+    up = " ".join(s["ticker"] for s in result.get("turning_up", [])) or "无"
+    dn = " ".join(s["ticker"] for s in result.get("turning_dn", [])) or "无"
+    body = f"MA20 {result.get('date', '')}\n↑ {up}\n↓ {dn}"
+    msg = MIMEText(body)
+    msg["From"]    = GMAIL_USER
+    msg["To"]      = f"{NOTIFY_PHONE}@txt.att.net"
+    msg["Subject"] = ""
+    with smtplib.SMTP("smtp.gmail.com", 587) as smtp:
+        smtp.starttls()
+        smtp.login(GMAIL_USER, GMAIL_APP_PASSWORD)
+        smtp.send_message(msg)
 _executor         = ThreadPoolExecutor(max_workers=1)   # one divergence scan at a time
 _volume_executor  = ThreadPoolExecutor(max_workers=1)   # one volume scan at a time
 _duck_executor    = ThreadPoolExecutor(max_workers=1)   # one duck scan at a time
@@ -929,5 +951,9 @@ async def _run_ma20_scan_task() -> None:
         result = await loop.run_in_executor(_ma20_executor, run_ma20_scan)
         set_ma20_result(result)
         set_ma20_status("done")
+        try:
+            _send_ma20_sms(result)
+        except Exception as sms_exc:
+            print(f"[WARN] MA20 SMS notification failed: {sms_exc}", flush=True)
     except Exception as exc:
         set_ma20_status("error", error=str(exc)[:200])
