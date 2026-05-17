@@ -135,9 +135,9 @@ def run_ma20_scan() -> dict:
         futures = [exe.submit(worker, t) for t in tickers]
         concurrent.futures.wait(futures)
 
-    # 按 |MA20 斜率| 降序（拐头幅度越大越靠前）
-    turning_up.sort(key=lambda x: abs(x["ma20_slope"]), reverse=True)
-    turning_dn.sort(key=lambda x: abs(x["ma20_slope"]), reverse=True)
+    # 按市值从高到低排列
+    turning_up.sort(key=lambda x: x["market_cap"], reverse=True)
+    turning_dn.sort(key=lambda x: x["market_cap"], reverse=True)
 
     tz_abbr = now_la.strftime("%Z")
 
