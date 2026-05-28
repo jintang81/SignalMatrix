@@ -158,7 +158,7 @@ def _send_ma20_sms(result: dict) -> None:
     body = f"MA20 {result.get('date', '')}\n↑ {up}\n↓ {dn}"
     msg = MIMEText(body)
     msg["From"]    = GMAIL_USER
-    msg["To"]      = f"{NOTIFY_PHONE}@txt.att.net"
+    msg["To"]      = f"{NOTIFY_PHONE}@mms.att.net"
     msg["Subject"] = ""
     with smtplib.SMTP("smtp.gmail.com", 587) as smtp:
         smtp.starttls()
