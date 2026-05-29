@@ -146,20 +146,20 @@ app.add_middleware(
 API_KEY            = os.environ.get("API_KEY", "")
 GMAIL_USER         = os.environ.get("GMAIL_USER", "")
 GMAIL_APP_PASSWORD = os.environ.get("GMAIL_APP_PASSWORD", "")
-NOTIFY_PHONE       = os.environ.get("NOTIFY_PHONE", "")  # 10-digit AT&T number
+NOTIFY_EMAIL       = os.environ.get("NOTIFY_EMAIL", "")
 
 
-def _send_ma20_sms(result: dict) -> None:
-    """Send MA20 scan summary via AT&T email-to-SMS gateway."""
-    if not all([GMAIL_USER, GMAIL_APP_PASSWORD, NOTIFY_PHONE]):
+def _send_ma20_email(result: dict) -> None:
+    """Send MA20 scan summary via Gmail SMTP."""
+    if not all([GMAIL_USER, GMAIL_APP_PASSWORD, NOTIFY_EMAIL]):
         return
     up = " ".join(s["ticker"] for s in result.get("turning_up", [])) or "无"
     dn = " ".join(s["ticker"] for s in result.get("turning_dn", [])) or "无"
-    body = f"MA20 {result.get('date', '')}\n↑ {up}\n↓ {dn}"
-    msg = MIMEText(body)
+    body = f"拐头向上：{up}\n\n拐头向下：{dn}"
+    msg = MIMEText(body, "plain", "utf-8")
     msg["From"]    = GMAIL_USER
-    msg["To"]      = f"{NOTIFY_PHONE}@mms.att.net"
-    msg["Subject"] = ""
+    msg["To"]      = NOTIFY_EMAIL
+    msg["Subject"] = f"MA20 拐头 {result.get('date', '')}"
     with smtplib.SMTP("smtp.gmail.com", 587) as smtp:
         smtp.starttls()
         smtp.login(GMAIL_USER, GMAIL_APP_PASSWORD)
@@ -952,7 +952,7 @@ async def _run_ma20_scan_task() -> None:
         set_ma20_result(result)
         set_ma20_status("done")
         try:
-            _send_ma20_sms(result)
+            _send_ma20_email(result)
         except Exception as sms_exc:
             print(f"[WARN] MA20 SMS notification failed: {sms_exc}", flush=True)
     except Exception as exc:
